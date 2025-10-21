@@ -1,10 +1,6 @@
 # Trust in Medical AI: Communicating Uncertainties to Patients
-
 This project contains the data analysis for my Master thesis in Artificial Intelligence at Radboud University.
 
-
-
 ## Abstract
-
 Artificial Intelligence (AI) is increasingly being integrated into healthcare, promising significant improvements in diagnosis and treatment through efficient and accurate data analysis. However, the adoption of AI technologies, such as Medical Decision Support Systems (MDSS), faces challenges due to low public trust. This research aims to explore the impact of communicating technical uncertainties on fostering trust in medical AI. The study will investigate whether transparent communication about AI’s inherent uncertainties negatively affects trust and thus hinders adoption, addressing the tension between the need for transparency and the risk of ambiguity aversion. Drawing parallels with science communication, where reporting uncertainties has shown positive effects on trust and credibility, this research will examine the effects of uncertainty communication on patients’ trust in AI systems. Additionally, the study will consider the moderating effects of demographic factors, affinity for technology, and trust in the healthcare system on the relationship between uncertainty communication and trust in medical AI. By understanding these dynamics, the research aims to provide insights into effective strategies for promoting the adoption of AI technologies in healthcare, ensuring that trust is built on a foundation of transparency and informed decision-making.
 
