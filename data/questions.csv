@@ -1,0 +1,82 @@
+item,question_statement,scale,options,inversed,subscale
+consent,"Consent Statement
+
+I confirm that:
+
+- I am 16 years of age or older
+
+- I have been informed about the study to my satisfaction
+
+- I have read the information carefully;
+
+- I have been given the opportunity to ask questions about the study;
+
+- my questions, if any, were answered to my satisfaction;
+
+- I have had a good opportunity to think about participating in the survey;
+
+- I am participating in the study of my own free will.
+
+
+
+I understand that:
+
+- I have the right to withdraw my consent at any time without giving any reason and without any adverse consequences for me, by closing the survey tab in the browser;
+
+- my personal data are processed in accordance with the AVG;
+
+- my personal data will be processed in accordance with the Radboud University Privacy Statement (https://www.ru.nl/en/about-us/policies-and-regulations/privacy-and-security/privacy-statements);
+
+
+
+I agree that:
+
+- my personal and/or research data are obtained within this research for scientific purposes and will be available for review, reuse and replication;
+
+- for monitoring the study, supervisory authorities may access my personal and research data.",mc,2,,
+gender,What is your gender?,mc,3,,
+age,What is your age?,int,,,
+education,What is the highest level of education that you have completed OR are currently enrolled in?,mc,8,,
+medical_prof,"Are you currently working in the medical field? This includes doctors, nurses or administrators at a hospital, a doctor's office or at a pharmacy, and also medical students.",mc,2,,
+Q19,How much experience do you have with using Artificial Intelligence?,likert,5,0,
+ATI_1,I like to occupy myself in greater detail with technical systems.,likert,5,0,ati
+ATI_2,I like testing the functions of new technical systems.,likert,5,0,ati
+ATI_3,I predominantly deal with technical systems because I have to.,likert,5,1,ati
+ATI_4,I predominantly deal with technical systems because I have to.,likert,5,0,ati
+ATI_5,I enjoy spending time becoming acquainted with a new technical system.,likert,5,0,ati
+ATI_6,It is enough for me that a technical system works; I don�t care how or why.,likert,5,1,ati
+ATI_7,I try to understand how a technical system exactly works.,likert,5,0,ati
+ATI_8,It is enough for me to know the basic functions of a technical system.,likert,5,1,ati
+ATI_9,I try to make full use of the capabilities of a technical system.,likert,5,0,ati
+HCSDS_C1,The Health Care System does its best to make patients� health better.,likert,5,0,hcsds_c
+HCSDS_C2,Patients receive high quality medical care from the Health Care System.,likert,5,0,hcsds_c
+HCSDS_C3,The Health Care System makes too many mistakes.,likert,5,1,hcsds_c
+HCSDS_C4,The Health Care System gives excellent medical care.,likert,5,0,hcsds_c
+HCSDS_V1,The Health Care System covers up its mistakes.,likert,5,1,hcsdc_v
+HCSDS_V2,The Health Care System puts making money above patients� needs.,likert,5,1,hcsdc_v
+HCSDS_V3,"Patients get the same medical treatment from the Health Care System, no matter what the patient�s race or ethnicity.",likert,5,0,hcsdc_v
+HCSDS_V4,The Health Care System lies to make money.,likert,5,1,hcsdc_v
+HCSDS_V5,The Health Care System experiments on patients without them knowing.,likert,5,1,hcsdc_v
+manip_check1_1,The MDSS makes medical decisions independently,likert,5,,manip
+manip_check1_2,The MDSS will give a correct diagnosis in 9 out of 10 cases,likert,5,,manip
+manip_check1_3,"The MDSS indicates exactly, how high the probability for a given diagnosis is",likert,5,,manip
+manip_check1_4,The doctors at the hospital know how the MDSS works,likert,5,,manip
+manip_check2,What is the accuracy of the MDSS described in the leaflet? (as a percentage or description),text,,,manip
+TiA_RC1,I expect the MDSS to interpret my medical data correctly,likert,5,0,tia_rc
+TiA_RC2,I expect the MDSS to give reliable recommendations,likert,5,0,tia_rc
+TiA_RC3,The MDSS is likely to give incorrect recommendations,likert,5,1,tia_rc
+TiA_RC4,The MDSS is capable of assisting in complicated tasks,likert,5,0,tia_rc
+TiA_RC5,The MDSS might make sporadic errors,likert,5,1,tia_rc
+TiA_RC6,I am confident about the MDSS�s capabilities,likert,5,0,tia_rc
+TiA_UP2,The MDSS�s recommendations are unpredictable,likert,5,1,tia_up
+TiA_UP3,I understand how the MDSS arrives at its recommendations,likert,5,0,tia_up
+TiA_UP4,It�s difficult to anticipate the MDSS�s recommendations,likert,5,1,tia_up
+TiA_F1,I have heard about similar systems,likert,5,0,tia_f
+TiA_F2,I have been treated with the help of similar systems in the past,likert,5,0,tia_f
+TiA_Pro1,One should be careful with unfamiliar AI systems,likert,5,1,tia_pro
+TiA_Pro2,I rather trust a system than I mistrust it,likert,5,0,tia_pro
+TiA_Pro3,AI systems generally work well,likert,5,0,tia_pro
+TiA_T1,I trust the MDSS,likert,5,0,tia_t
+TiA_T2,I  can rely on doctors using the MDSS,likert,5,0,tia_t
+id,,,,,
+stimulus_group,,mc,2,,
