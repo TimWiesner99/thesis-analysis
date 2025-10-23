@@ -1,47 +1,46 @@
-item	0	1	2	3	4	5	6	7	8
-consent		I agree to participate in the study	I do not agree to participate in this study						
-gender		Male	Female	Other/Prefer not to say					
-education		Primary Education	Lower Secondary Education	HigherSecondary Education (High School Diploma)	Vocational Diploma)	Associate Degree	Bachelor's	Master's	PhD
-medical_prof	No	Yes							
-Q19		"No experience at all, I never use AI"	"A little experience, I have used AI before"	"A moderate amount of experience, I sometimes use AI"	"A lot of experience, I use AI regularly"	"A great deal of experience, I use AI all the time"			
-ATI_1		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-ATI_2		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-ATI_3		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-ATI_4		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-ATI_5		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-ATI_6		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-ATI_7		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-ATI_8		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-ATI_9		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-HCSDS_C1		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-HCSDS_C2		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-HCSDS_C3		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-HCSDS_C4		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-HCSDS_V1		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-HCSDS_V2		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-HCSDS_V3		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-HCSDS_V4		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-HCSDS_V5		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-manip_check1_1		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-manip_check1_2		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-manip_check1_3		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-manip_check1_4		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-manip_check2		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_RC1		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_RC2		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_RC3		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_RC4		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_RC5		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_RC6		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_UP2		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_UP3		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_UP4		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_F1		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_F2		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_Pro1		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_Pro2		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_Pro3		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_T1		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-TiA_T2		Strongly disagree	Somewhat disagree	Neither agree nor disagree	Somewhat agree	Strongly agree			
-id									
-stimulus_group									
+﻿item,0,1,2,3,4,5,6,7,8
+consent,,I agree to participate in the study,I do not agree to participate in this study,,,,,,
+gender,,Male,Female,Other/Prefer not to say,,,,,
+education,,Primary Education,Lower Secondary Education,HigherSecondary Education (High School Diploma),Vocational Diploma),Associate Degree,Bachelor's,Master's,PhD
+medical_prof,No,Yes,,,,,,,
+Q19,,"No experience at all, I never use AI","A little experience, I have used AI before","A moderate amount of experience, I sometimes use AI","A lot of experience, I use AI regularly","A great deal of experience, I use AI all the time",,,
+ATI_1,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+ATI_2,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+ATI_3,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+ATI_4,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+ATI_5,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+ATI_6,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+ATI_7,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+ATI_8,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+ATI_9,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+HCSDS_C1,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+HCSDS_C2,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+HCSDS_C3,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+HCSDS_C4,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+HCSDS_V1,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+HCSDS_V2,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+HCSDS_V3,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+HCSDS_V4,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+HCSDS_V5,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+manip_check1_1,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+manip_check1_2,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+manip_check1_3,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+manip_check1_4,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+manip_check2,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_RC1,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_RC2,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_RC3,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_RC4,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_RC5,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_RC6,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_UP2,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_UP3,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_UP4,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_F1,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_F2,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_Pro1,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_Pro2,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_Pro3,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_T1,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+TiA_T2,,Strongly disagree,Somewhat disagree,Neither agree nor disagree,Somewhat agree,Strongly agree,,,
+stimulus_group,control,uncertainty,,,,,,,
