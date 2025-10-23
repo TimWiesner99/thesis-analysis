@@ -1,4 +1,4 @@
-item,question_statement,scale,options,inversed,subscale
+item,question_statement,scale,options,inverted,subscale
 consent,"Consent Statement
 
 I confirm that:
@@ -57,11 +57,11 @@ HCSDS_V2,The Health Care System puts making money above patients� needs.,liker
 HCSDS_V3,"Patients get the same medical treatment from the Health Care System, no matter what the patient�s race or ethnicity.",likert,5,0,hcsdc_v
 HCSDS_V4,The Health Care System lies to make money.,likert,5,1,hcsdc_v
 HCSDS_V5,The Health Care System experiments on patients without them knowing.,likert,5,1,hcsdc_v
-manip_check1_1,The MDSS makes medical decisions independently,likert,5,,manip
-manip_check1_2,The MDSS will give a correct diagnosis in 9 out of 10 cases,likert,5,,manip
-manip_check1_3,"The MDSS indicates exactly, how high the probability for a given diagnosis is",likert,5,,manip
-manip_check1_4,The doctors at the hospital know how the MDSS works,likert,5,,manip
-manip_check2,What is the accuracy of the MDSS described in the leaflet? (as a percentage or description),text,,,manip
+manip_check1_1,The MDSS makes medical decisions independently,likert,5,,""
+manip_check1_2,The MDSS will give a correct diagnosis in 9 out of 10 cases,likert,5,,""
+manip_check1_3,"The MDSS indicates exactly, how high the probability for a given diagnosis is",likert,5,,""
+manip_check1_4,The doctors at the hospital know how the MDSS works,likert,5,,""
+manip_check2,What is the accuracy of the MDSS described in the leaflet? (as a percentage or description),text,,,""
 TiA_RC1,I expect the MDSS to interpret my medical data correctly,likert,5,0,tia_rc
 TiA_RC2,I expect the MDSS to give reliable recommendations,likert,5,0,tia_rc
 TiA_RC3,The MDSS is likely to give incorrect recommendations,likert,5,1,tia_rc
