@@ -514,6 +514,221 @@ def plot_continuous_distribution(data: pd.DataFrame,
     return ax
 
 
+def plot_boxplot(data: pd.DataFrame,
+                 columns: List[str],
+                 title: Optional[str] = None,
+                 group_by: Optional[str] = None,
+                 ax: Optional[plt.Axes] = None,
+                 show_stats: bool = True,
+                 use_full_labels: bool = False,
+                 short_labels: Optional[List[str]] = None,
+                 title_pad: Optional[int] = None) -> plt.Axes:
+    """
+    Plot boxplots for multiple items, optionally comparing experimental groups.
+
+    When comparing groups, boxes are grouped by item with group comparisons side-by-side.
+    All items share the same y-axis scale for easy comparison (ideal for Likert scales).
+
+    Args:
+        data: DataFrame containing the data
+        columns: List of column names to plot (e.g., ['tia_rc', 'tia_up', 'tia_f'])
+        title: Plot title (auto-generated if None)
+        group_by: Optional column to group by (e.g., 'stimulus_group')
+        ax: Optional matplotlib axes (creates new figure if None)
+        show_stats: Whether to show Cohen's d and p-value when comparing groups
+        use_full_labels: If True, use full labels from labels.csv; if False, use short_labels or column names
+        short_labels: Optional list of short labels for x-axis (must match length of columns)
+        title_pad: Padding between title and plot (auto-increased when showing stats to prevent overlap)
+
+    Returns:
+        The matplotlib axes object
+
+    Note:
+        When show_stats=True and group_by is specified, title padding is automatically increased
+        to prevent statistical annotations from overlapping with the title.
+
+    Example:
+        >>> # Simple boxplot with short labels
+        >>> plot_boxplot(data, ['tia_rc', 'tia_up', 'tia_f'])
+
+        >>> # Compare groups with custom short labels
+        >>> plot_boxplot(data, ['tia_rc', 'tia_up', 'tia_f'],
+        ...              group_by='stimulus_group',
+        ...              short_labels=['R/C', 'U/P', 'Fam'])
+
+        >>> # Use full labels from labels.csv
+        >>> plot_boxplot(data, ['tia_rc', 'tia_up'],
+        ...              group_by='stimulus_group',
+        ...              use_full_labels=True)
+    """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Generate title if not provided
+    if title is None:
+        if group_by is not None:
+            title = "Comparison Across Items"
+        else:
+            title = "Distribution Across Items"
+
+    # Determine x-axis labels
+    if use_full_labels:
+        # Try to get full labels from labels.csv
+        x_labels = []
+        for col in columns:
+            try:
+                # Try to get the question text or label
+                label = questions[questions['item'] == col]['question'].values
+                if len(label) > 0:
+                    x_labels.append(truncate_label(label[0], max_length=30))
+                else:
+                    x_labels.append(col.upper())
+            except:
+                x_labels.append(col.upper())
+    elif short_labels is not None:
+        if len(short_labels) != len(columns):
+            raise ValueError(f"short_labels length ({len(short_labels)}) must match columns length ({len(columns)})")
+        x_labels = short_labels
+    else:
+        # Use column names as default
+        x_labels = [col.upper() for col in columns]
+
+    # Prepare data for plotting
+    if group_by is not None and group_by in data.columns:
+        # Grouped boxplot
+        groups = sorted(data[group_by].unique())
+        n_groups = len(groups)
+        n_items = len(columns)
+
+        # Calculate positions for boxes
+        # Each item gets a cluster of boxes (one per group)
+        width = 0.35  # Width of each box
+        positions = []
+        group_positions = {group: [] for group in groups}
+
+        for i, col in enumerate(columns):
+            # Center of this item's cluster
+            center = i * (n_groups * width + 0.5)
+            for j, group in enumerate(groups):
+                pos = center + (j - n_groups/2 + 0.5) * width
+                positions.append(pos)
+                group_positions[group].append(pos)
+
+        # Store data for effect size calculation
+        effect_sizes = []
+        p_values = []
+
+        # Plot boxes for each group
+        for group_idx, group in enumerate(groups):
+            # Get readable label for group
+            try:
+                group_label = get_label_for_value(group_by, group)
+            except (ValueError, KeyError):
+                group_label = str(group)
+
+            # Choose color
+            color = COLORS.get(group_label.lower(), COLORS['primary'])
+
+            # Collect data for this group across all items
+            group_data = []
+            for col in columns:
+                col_data = data[data[group_by] == group][col].dropna()
+                group_data.append(col_data)
+
+            # Plot boxplots for this group
+            bp = ax.boxplot(group_data,
+                           positions=group_positions[group],
+                           widths=width,
+                           patch_artist=True,
+                           labels=['' for _ in columns],  # No labels on individual boxes
+                           showfliers=True,  # Show outliers
+                           flierprops=dict(marker='o', markerfacecolor=color,
+                                         markersize=4, alpha=0.5,
+                                         markeredgecolor=color),
+                           medianprops=dict(color='black', linewidth=1.5),
+                           boxprops=dict(facecolor=color, alpha=STYLE_CONFIG['hist_alpha'],
+                                       edgecolor='black', linewidth=1),
+                           whiskerprops=dict(color='black', linewidth=1),
+                           capprops=dict(color='black', linewidth=1))
+
+            # Add to legend (just once per group)
+            bp['boxes'][0].set_label(group_label)
+
+        # Calculate effect sizes and p-values if comparing two groups
+        if show_stats and n_groups == 2:
+            group_labels = []
+            for group in groups:
+                try:
+                    group_labels.append(get_label_for_value(group_by, group))
+                except (ValueError, KeyError):
+                    group_labels.append(str(group))
+
+            for col_idx, col in enumerate(columns):
+                group1_data = data[data[group_by] == groups[0]][col].dropna()
+                group2_data = data[data[group_by] == groups[1]][col].dropna()
+
+                d = cohens_d(group1_data, group2_data)
+                p = independent_t_test(group1_data, group2_data)
+
+                effect_sizes.append(d)
+                p_values.append(p)
+
+                # Add text annotation above boxes
+                # Find the max value in this item's data for positioning
+                max_val = max(group1_data.max(), group2_data.max())
+
+                # Position text above the item cluster
+                text_x = col_idx * (n_groups * width + 0.5)
+                text_y = max_val * 1.05  # 5% above max value
+
+                # Format text
+                text_str = f"δ={d:.3f}\nα={p:.3f}"
+                ax.text(text_x, text_y, text_str,
+                       ha='center', va='bottom',
+                       fontsize=STYLE_CONFIG['tick_size'] - 1,
+                       bbox=dict(boxstyle='round,pad=0.3',
+                               facecolor='wheat', alpha=0.3,
+                               edgecolor='none'))
+
+        # Set x-tick positions at center of each item cluster
+        tick_positions = [i * (n_groups * width + 0.5) for i in range(n_items)]
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(x_labels, rotation=45, ha='right')
+
+        # Add legend
+        ax.legend(frameon=False, fontsize=STYLE_CONFIG['font_size'])
+
+    else:
+        # Single boxplot (no grouping)
+        plot_data = [data[col].dropna() for col in columns]
+
+        bp = ax.boxplot(plot_data,
+                       labels=x_labels,
+                       patch_artist=True,
+                       showfliers=True,
+                       flierprops=dict(marker='o', markerfacecolor=COLORS['primary'],
+                                     markersize=4, alpha=0.5,
+                                     markeredgecolor=COLORS['primary']),
+                       medianprops=dict(color='black', linewidth=1.5),
+                       boxprops=dict(facecolor=COLORS['primary'],
+                                   alpha=STYLE_CONFIG['hist_alpha'],
+                                   edgecolor='black', linewidth=1),
+                       whiskerprops=dict(color='black', linewidth=1),
+                       capprops=dict(color='black', linewidth=1))
+
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+
+    # Apply styling
+    # Increase title padding if showing statistical annotations to prevent overlap
+    if title_pad is None and group_by is not None and show_stats:
+        title_pad = 35  # Extra space for statistical annotations above boxes
+
+    apply_consistent_style(ax, title=title, xlabel='Items',
+                          ylabel='Score', title_pad=title_pad)
+
+    return ax
+
+
 def create_figure_grid(n_plots: int,
                       ncols: int = 2,
                       figsize: Optional[Tuple[int, int]] = None) -> Tuple[plt.Figure, np.ndarray]:
@@ -582,6 +797,7 @@ from scripts.viz_utils import (
     plot_likert_distribution,
     plot_categorical_bar,
     plot_continuous_distribution,
+    plot_boxplot,
     create_figure_grid,
     set_custom_colors
 )
@@ -630,14 +846,32 @@ for idx, scale in enumerate(scales):
 plt.tight_layout()
 plt.show()
 
-# 5. Customize colors
+# 5. Boxplots - Multiple items comparison
+# Simple boxplot with default labels (column names in uppercase)
+plot_boxplot(data, ['tia_rc', 'tia_up', 'tia_f'])
+plt.show()
+
+# 5b. Compare groups with custom short labels
+plot_boxplot(data, ['tia_rc', 'tia_up', 'tia_f', 'tia_pro', 'tia_t'],
+             group_by='stimulus_group',
+             short_labels=['Reliability', 'Understanding', 'Familiarity', 'Propensity', 'Trust'],
+             title='Trust in Automation Subscales by Group')
+plt.show()
+
+# 5c. Use full labels from labels.csv (auto-truncated)
+plot_boxplot(data, ['tia_rc', 'tia_up'],
+             group_by='stimulus_group',
+             use_full_labels=True)
+plt.show()
+
+# 6. Customize colors
 set_custom_colors({
     'control': '#3498DB',      # Blue
     'uncertainty': '#E74C3C',   # Red
     'primary': '#2C3E50'        # Dark gray
 })
 
-# 6. Demographics overview
+# 7. Demographics overview
 fig, axes = create_figure_grid(4, ncols=2, figsize=(12, 8))
 
 plot_categorical_bar(data, 'gender', ax=axes[0])
