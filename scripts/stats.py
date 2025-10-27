@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 def cohens_d(group1: pd.Series, group2: pd.Series) -> float:
     """
@@ -74,7 +75,6 @@ def independent_t_test(group1: pd.Series, group2: pd.Series) -> float:
         >>> print(f"p-value: {p_value:.4f}")
         p-value: 0.0234
     """
-    from scipy import stats
 
     # Perform Welch's t-test (does not assume equal variances)
     # This is generally more robust than Student's t-test
@@ -110,7 +110,6 @@ def chi_square_test(contingency_table: pd.DataFrame) -> float:
         >>> print(f"p-value: {p_value:.4f}")
         p-value: 0.0234
     """
-    from scipy import stats
 
     # Perform chi-square test of independence
     chi2, p_value, dof, expected = stats.chi2_contingency(contingency_table)
@@ -148,7 +147,6 @@ def cramers_v(contingency_table: pd.DataFrame) -> float:
         >>> print(f"Cramér's V: {effect_size:.3f}")
         Cramér's V: 0.123
     """
-    from scipy import stats
 
     # Perform chi-square test
     chi2, p_value, dof, expected = stats.chi2_contingency(contingency_table)
