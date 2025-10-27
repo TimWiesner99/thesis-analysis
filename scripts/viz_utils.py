@@ -13,7 +13,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Optional, Tuple, List
-from .utils import get_label_for_value, get_question_statement, cohens_d, independent_t_test, chi_square_test, cramers_v
+from .utils import get_label_for_value, get_question_statement
+from .stats import cohens_d, independent_t_test, chi_square_test, cramers_v
 
 # Load metadata
 DATA_PATH = Path(__file__).parent.parent / "data"
@@ -137,6 +138,7 @@ def plot_likert_distribution(data: pd.DataFrame,
                              group_by: Optional[str] = None,
                              ax: Optional[plt.Axes] = None,
                              show_stats: bool = True,
+                             show_bars: bool = True,
                              show_kde: bool = False,
                              show_correlation: bool = True,
                              likert_range: int = 5,
@@ -155,6 +157,7 @@ def plot_likert_distribution(data: pd.DataFrame,
         group_by: Optional column to group by (e.g., 'stimulus_group')
         ax: Optional matplotlib axes (creates new figure if None)
         show_stats: Whether to show mean and SD in legend
+        show_bars: Whether to show histogram bars (default: True)
         show_kde: Whether to show KDE (kernel density estimate) overlay (default: False)
         show_correlation: Whether to show Cohen's d (δ) and p-value (α) from t-test between groups (default: True)
         likert_range: Max value of Likert scale (default: 5, for 1-5 scale)
@@ -169,7 +172,7 @@ def plot_likert_distribution(data: pd.DataFrame,
         >>> plot_likert_distribution(data, 'ati', group_by='stimulus_group', show_kde=True)
         >>> plot_likert_distribution(data, 'ATI_1', likert_range=5, show_labels=True, trunc=15)
         >>> plot_likert_distribution(data, 'ati', group_by='stimulus_group', show_correlation=True)
-        >>> plot_likert_distribution(data, 'ati', group_by='stimulus_group', show_correlation=False)
+        >>> plot_likert_distribution(data, 'ati', group_by='stimulus_group', show_bars=False, show_kde=True)
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 5))
@@ -178,6 +181,10 @@ def plot_likert_distribution(data: pd.DataFrame,
     if title is None:
         title = f"Distribution of {column.upper()}"
 
+    # Remove stats from legend if kde plot is chosen
+    if show_kde:
+        show_stats = False
+
     # Check if grouping is requested
     if group_by is not None and group_by in data.columns:
         # Get unique groups
@@ -185,7 +192,9 @@ def plot_likert_distribution(data: pd.DataFrame,
 
         # Store group data for correlation calculation
         group_means = {}
+        group_info = {}  # Store group data, mean, std, color, label
 
+        # First pass: collect all group data and calculate means
         for group in groups:
             group_data = data[data[group_by] == group][column].dropna()
 
@@ -201,18 +210,89 @@ def plot_likert_distribution(data: pd.DataFrame,
             # Choose color
             color = COLORS.get(group_label.lower(), COLORS['primary'])
 
+            # Store group info
+            group_info[group_label] = {
+                'data': group_data,
+                'mean': group_data.mean(),
+                'std': group_data.std(),
+                'color': color
+            }
+
+        # Determine label positioning based on mean comparison
+        # Sort groups by mean to determine which has higher/lower mean
+        sorted_groups = sorted(group_info.items(), key=lambda x: x[1]['mean'])
+
+        # Second pass: plot with adjusted label positions
+        for group in groups:
+            # Get readable label for group
+            try:
+                group_label = get_label_for_value(group_by, group)
+            except (ValueError, KeyError):
+                group_label = str(group)
+
+            info = group_info[group_label]
+            group_data = info['data']
+            mean = info['mean']
+            std = info['std']
+            color = info['color']
+
             # Add stats to label if requested
             label = group_label
             if show_stats:
-                label += f" (M={group_data.mean():.2f}, SD={group_data.std():.2f})"
+                label += f" (M={mean:.2f}, SD={std:.2f})"
 
-            # Plot histogram
-            ax.hist(group_data, bins=20, alpha=STYLE_CONFIG['hist_alpha'],
-                   label=label, color=color, edgecolor='white', linewidth=0.5)
+            # Determine label alignment based on whether this is the lower or higher mean group
+            is_lower_mean = (group_label == sorted_groups[0][0])
+            is_higher_mean = (group_label == sorted_groups[-1][0])
+
+            # Plot histogram (optional)
+            if show_bars:
+                ax.hist(group_data, bins=20, alpha=STYLE_CONFIG['hist_alpha'],
+                       label=label, color=color, edgecolor='white', linewidth=0.5)
 
             # Plot KDE (optional)
             if show_kde:
-                group_data.plot.kde(ax=ax, color=color, linewidth=STYLE_CONFIG['kde_linewidth'])
+                group_data.plot.kde(ax=ax, color=color, linewidth=STYLE_CONFIG['kde_linewidth'],
+                                   label=label if not show_bars else None)
+
+                # Add vertical line for mean
+                ax.axvline(mean, color=color, linestyle='--', linewidth=1.5, alpha=0.6)
+
+                # Add text label for mean at top of plot with adjusted positioning
+                y_top = ax.get_ylim()[1] * 0.95
+                # Adjust horizontal alignment and position based on mean ranking
+                if is_lower_mean:
+                    mean_ha = 'right'
+                    mean_x = mean - 0.05  # Slightly to the left
+                elif is_higher_mean:
+                    mean_ha = 'left'
+                    mean_x = mean + 0.05  # Slightly to the right
+                else:
+                    mean_ha = 'center'
+                    mean_x = mean
+
+                ax.text(mean_x, y_top, f'M={mean:.2f}', color=color, fontsize=STYLE_CONFIG['tick_size']-1,
+                       ha=mean_ha, va='top', fontweight='bold',
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor=color, alpha=0.8))
+
+                # Add horizontal line for standard deviation
+                y_pos = ax.get_ylim()[0] + (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.02
+                ax.hlines(y_pos, mean - std, mean + std, color=color, linewidth=3, alpha=0.7)
+
+                # Add text label for SD with adjusted positioning
+                if is_lower_mean:
+                    sd_ha = 'right'
+                    sd_x = mean - 0.05  # Slightly to the left
+                elif is_higher_mean:
+                    sd_ha = 'left'
+                    sd_x = mean + 0.05  # Slightly to the right
+                else:
+                    sd_ha = 'center'
+                    sd_x = mean
+
+                ax.text(sd_x, y_pos, f'SD={std:.2f}', color=color, fontsize=STYLE_CONFIG['tick_size']-1,
+                       ha=sd_ha, va='bottom', fontweight='bold',
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor=color, alpha=0.8))
 
         # Calculate and display correlation/effect size between groups if requested
         if show_correlation and len(group_means) == 2:
@@ -239,14 +319,25 @@ def plot_likert_distribution(data: pd.DataFrame,
         if show_stats:
             label += f" (M={plot_data.mean():.2f}, SD={plot_data.std():.2f})"
 
-        # Plot histogram
-        ax.hist(plot_data, bins=20, alpha=STYLE_CONFIG['hist_alpha'],
-               label=label, color=COLORS['primary'], edgecolor='white', linewidth=0.5)
+        # Plot histogram (optional)
+        if show_bars:
+            ax.hist(plot_data, bins=20, alpha=STYLE_CONFIG['hist_alpha'],
+                   label=label, color=COLORS['primary'], edgecolor='white', linewidth=0.5)
 
         # Plot KDE (optional)
         if show_kde:
             plot_data.plot.kde(ax=ax, color=COLORS['primary'],
-                              linewidth=STYLE_CONFIG['kde_linewidth'])
+                              linewidth=STYLE_CONFIG['kde_linewidth'],
+                              label=label if not show_bars else None)
+
+            # Add vertical line for mean
+            mean = plot_data.mean()
+            ax.axvline(mean, color=COLORS['primary'], linestyle='--', linewidth=1.5, alpha=0.6)
+
+            # Add horizontal line for standard deviation
+            std = plot_data.std()
+            y_pos = ax.get_ylim()[0] + (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.02
+            ax.hlines(y_pos, mean - std, mean + std, color=COLORS['primary'], linewidth=3, alpha=0.7)
 
     # Set x-axis limits based on Likert scale range (1 to likert_range)
     # This ensures consistent scale across all Likert plots
@@ -291,6 +382,7 @@ def plot_categorical_bar(data: pd.DataFrame,
                         title: Optional[str] = None,
                         group_by: Optional[str] = None,
                         ax: Optional[plt.Axes] = None,
+                        show_bars: bool = True,
                         show_percentages: bool = True,
                         show_absolute: bool = True,
                         show_stats: bool = True,
@@ -305,7 +397,9 @@ def plot_categorical_bar(data: pd.DataFrame,
         title: Plot title (auto-generated if None)
         group_by: Optional column to group by (e.g., 'stimulus_group')
         ax: Optional matplotlib axes (creates new figure if None)
+        show_bars: Whether to show bars (default: True)
         show_percentages: Whether to show percentages on bars
+        show_absolute: Whether to show absolute counts on bars
         show_stats: Whether to show Cramér's V (effect size) and p-value when comparing groups (default: True)
         trunc: Max characters for labels before truncation. -1 = no truncation (default: 20)
         title_pad: Padding between title and plot (uses STYLE_CONFIG default if None)
@@ -317,6 +411,7 @@ def plot_categorical_bar(data: pd.DataFrame,
         >>> plot_categorical_bar(data, 'gender', group_by='stimulus_group')
         >>> plot_categorical_bar(data, 'education', trunc=20)
         >>> plot_categorical_bar(data, 'gender', group_by='stimulus_group', show_stats=False)
+        >>> plot_categorical_bar(data, 'gender', show_bars=False)
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -345,21 +440,23 @@ def plot_categorical_bar(data: pd.DataFrame,
         colors = [COLORS.get(label.lower(), COLORS['primary']) for label in group_labels]
         color_dict = dict(zip(group_labels, colors))
 
-        counts_plot.plot(kind='bar', ax=ax, color=color_dict, alpha=STYLE_CONFIG['hist_alpha'],
-                        edgecolor='white', linewidth=1)
+        # Plot bars (optional)
+        if show_bars:
+            counts_plot.plot(kind='bar', ax=ax, color=color_dict, alpha=STYLE_CONFIG['hist_alpha'],
+                            edgecolor='white', linewidth=1)
 
         # Add percentage labels if requested
-        if show_percentages and show_absolute:
+        if show_bars and show_percentages and show_absolute:
             for container in ax.containers:
                 labels = [f'{v:.0f}\n({v/counts.values.sum()*100:.1f}%)' if v > 0 else ''
                          for v in container.datavalues]
                 ax.bar_label(container, labels=labels, fontsize=STYLE_CONFIG['tick_size'])
-        elif show_percentages and not show_absolute:
+        elif show_bars and show_percentages and not show_absolute:
             for container in ax.containers:
                 labels = [f'{v / counts.values.sum() * 100:.1f}%' if v > 0 else ''
                           for v in container.datavalues]
                 ax.bar_label(container, labels=labels, fontsize=STYLE_CONFIG['tick_size'])
-        elif not show_percentages and show_absolute:
+        elif show_bars and not show_percentages and show_absolute:
             for container in ax.containers:
                 labels = [f'{v:.0f}' if v > 0 else ''
                           for v in container.datavalues]
@@ -464,7 +561,9 @@ def plot_continuous_distribution(data: pd.DataFrame,
 
         # Store group data for effect size calculation
         group_means = {}
+        group_info = {}  # Store group data, mean, std, color, label
 
+        # First pass: collect all group data and calculate means
         for group in groups:
             group_data = data[data[group_by] == group][column].dropna()
 
@@ -480,10 +579,44 @@ def plot_continuous_distribution(data: pd.DataFrame,
             # Choose color
             color = COLORS.get(group_label.lower(), COLORS['primary'])
 
+            # Store group info
+            group_info[group_label] = {
+                'data': group_data,
+                'mean': group_data.mean(),
+                'std': group_data.std(),
+                'color': color
+            }
+
+        # Determine label positioning based on mean comparison
+        # Sort groups by mean to determine which has higher/lower mean
+        sorted_groups = sorted(group_info.items(), key=lambda x: x[1]['mean'])
+
+        # Second pass: plot with adjusted label positions
+        for group in groups:
+            # Get readable label for group
+            try:
+                group_label = get_label_for_value(group_by, group)
+            except (ValueError, KeyError):
+                group_label = str(group)
+
+            info = group_info[group_label]
+            group_data = info['data']
+            mean = info['mean']
+            std = info['std']
+            color = info['color']
+
             # Add stats to label if requested
             label = group_label
             if show_stats:
-                label += f" (M={group_data.mean():.1f}, SD={group_data.std():.1f})"
+                label += f" (M={mean:.1f}, SD={std:.1f})"
+
+            # Determine label alignment based on whether this is the lower or higher mean group
+            is_lower_mean = (group_label == sorted_groups[0][0])
+            is_higher_mean = (group_label == sorted_groups[-1][0])
+
+            # Calculate offset for label positioning (proportional to data range)
+            data_range = data[column].max() - data[column].min()
+            offset = data_range * 0.02  # 2% of data range
 
             # Plot histogram
             ax.hist(group_data, bins=bins, alpha=STYLE_CONFIG['hist_alpha'],
@@ -492,6 +625,44 @@ def plot_continuous_distribution(data: pd.DataFrame,
             # Plot KDE (optional)
             if show_kde:
                 group_data.plot.kde(ax=ax, color=color, linewidth=STYLE_CONFIG['kde_linewidth'])
+
+                # Add vertical line for mean
+                ax.axvline(mean, color=color, linestyle='--', linewidth=1.5, alpha=0.6)
+
+                # Add text label for mean at top of plot with adjusted positioning
+                y_top = ax.get_ylim()[1] * 0.95
+                if is_lower_mean:
+                    mean_ha = 'right'
+                    mean_x = mean - offset
+                elif is_higher_mean:
+                    mean_ha = 'left'
+                    mean_x = mean + offset
+                else:
+                    mean_ha = 'center'
+                    mean_x = mean
+
+                ax.text(mean_x, y_top, f'M={mean:.1f}', color=color, fontsize=STYLE_CONFIG['tick_size']-1,
+                       ha=mean_ha, va='top', fontweight='bold',
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor=color, alpha=0.8))
+
+                # Add horizontal line for standard deviation
+                y_pos = ax.get_ylim()[0] + (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.02
+                ax.hlines(y_pos, mean - std, mean + std, color=color, linewidth=3, alpha=0.7)
+
+                # Add text label for SD with adjusted positioning
+                if is_lower_mean:
+                    sd_ha = 'right'
+                    sd_x = mean - offset
+                elif is_higher_mean:
+                    sd_ha = 'left'
+                    sd_x = mean + offset
+                else:
+                    sd_ha = 'center'
+                    sd_x = mean
+
+                ax.text(sd_x, y_pos, f'SD={std:.1f}', color=color, fontsize=STYLE_CONFIG['tick_size']-1,
+                       ha=sd_ha, va='bottom', fontweight='bold',
+                       bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor=color, alpha=0.8))
 
         # Calculate and display effect size between groups if requested
         if show_correlation and len(group_means) == 2:
@@ -526,6 +697,15 @@ def plot_continuous_distribution(data: pd.DataFrame,
         if show_kde:
             plot_data.plot.kde(ax=ax, color=COLORS['primary'],
                               linewidth=STYLE_CONFIG['kde_linewidth'])
+
+            # Add vertical line for mean
+            mean = plot_data.mean()
+            ax.axvline(mean, color=COLORS['primary'], linestyle='--', linewidth=1.5, alpha=0.6)
+
+            # Add horizontal line for standard deviation
+            std = plot_data.std()
+            y_pos = ax.get_ylim()[0] + (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.02
+            ax.hlines(y_pos, mean - std, mean + std, color=COLORS['primary'], linewidth=3, alpha=0.7)
 
     # Set x-axis limits based on actual data range
     # This ensures the plot shows only the range where data exists
