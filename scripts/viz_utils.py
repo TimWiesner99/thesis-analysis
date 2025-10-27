@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Optional, Tuple, List
-from .utils import get_label_for_value, cohens_d, independent_t_test
+from .utils import get_label_for_value, get_question_statement, cohens_d, independent_t_test, chi_square_test, cramers_v
 
 # Load metadata
 DATA_PATH = Path(__file__).parent.parent / "data"
@@ -292,6 +292,8 @@ def plot_categorical_bar(data: pd.DataFrame,
                         group_by: Optional[str] = None,
                         ax: Optional[plt.Axes] = None,
                         show_percentages: bool = True,
+                        show_absolute: bool = True,
+                        show_stats: bool = True,
                         trunc: int = 20,
                         title_pad: Optional[int] = None) -> plt.Axes:
     """
@@ -304,6 +306,7 @@ def plot_categorical_bar(data: pd.DataFrame,
         group_by: Optional column to group by (e.g., 'stimulus_group')
         ax: Optional matplotlib axes (creates new figure if None)
         show_percentages: Whether to show percentages on bars
+        show_stats: Whether to show Cramér's V (effect size) and p-value when comparing groups (default: True)
         trunc: Max characters for labels before truncation. -1 = no truncation (default: 20)
         title_pad: Padding between title and plot (uses STYLE_CONFIG default if None)
 
@@ -313,6 +316,7 @@ def plot_categorical_bar(data: pd.DataFrame,
     Example:
         >>> plot_categorical_bar(data, 'gender', group_by='stimulus_group')
         >>> plot_categorical_bar(data, 'education', trunc=20)
+        >>> plot_categorical_bar(data, 'gender', group_by='stimulus_group', show_stats=False)
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -326,27 +330,56 @@ def plot_categorical_bar(data: pd.DataFrame,
         # Grouped bar chart
         counts = data.groupby([column, group_by]).size().unstack(fill_value=0)
 
-        # Get readable labels for x-axis
+        # Get readable labels for x-axis (apply truncation)
         x_labels = get_readable_labels(column, counts.index.tolist(), trunc=trunc)
 
-        # Get readable labels for groups (legend)
-        group_labels = get_readable_labels(group_by, counts.columns.tolist(), trunc=trunc)
+        # Get readable labels for groups (legend) - NO truncation for legend
+        group_labels = get_readable_labels(group_by, counts.columns.tolist(), trunc=-1)
         counts.columns = group_labels
 
         # Plot grouped bars
         counts_plot = counts.copy()
         counts_plot.index = x_labels
 
+        # Create color mapping: map each group label to its color
         colors = [COLORS.get(label.lower(), COLORS['primary']) for label in group_labels]
-        counts_plot.plot(kind='bar', ax=ax, color=colors, alpha=STYLE_CONFIG['hist_alpha'],
+        color_dict = dict(zip(group_labels, colors))
+
+        counts_plot.plot(kind='bar', ax=ax, color=color_dict, alpha=STYLE_CONFIG['hist_alpha'],
                         edgecolor='white', linewidth=1)
 
         # Add percentage labels if requested
-        if show_percentages:
+        if show_percentages and show_absolute:
             for container in ax.containers:
                 labels = [f'{v:.0f}\n({v/counts.values.sum()*100:.1f}%)' if v > 0 else ''
                          for v in container.datavalues]
                 ax.bar_label(container, labels=labels, fontsize=STYLE_CONFIG['tick_size'])
+        elif show_percentages and not show_absolute:
+            for container in ax.containers:
+                labels = [f'{v / counts.values.sum() * 100:.1f}%' if v > 0 else ''
+                          for v in container.datavalues]
+                ax.bar_label(container, labels=labels, fontsize=STYLE_CONFIG['tick_size'])
+        elif not show_percentages and show_absolute:
+            for container in ax.containers:
+                labels = [f'{v:.0f}' if v > 0 else ''
+                          for v in container.datavalues]
+                ax.bar_label(container, labels=labels, fontsize=STYLE_CONFIG['tick_size'])
+
+
+        # Calculate and display statistics if requested and we have exactly 2 groups
+        if show_stats and len(group_labels) == 2:
+            # Calculate Cramér's V (effect size) and p-value (chi-square test)
+            effect_size = cramers_v(counts)
+            p_value = chi_square_test(counts)
+
+            # Add text box with effect size and p-value
+            # V for Cramér's V (using 'V' instead of Greek letter for clarity)
+            # α for p-value (alpha)
+            textstr = f"V = {effect_size:.4f}\nα = {p_value:.4f}"
+            props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+            ax.text(0.98, 0.98, textstr, transform=ax.transAxes,
+                   fontsize=STYLE_CONFIG['font_size'], verticalalignment='top',
+                   horizontalalignment='right', bbox=props)
     else:
         # Single bar chart (no grouping)
         counts = data[column].value_counts().sort_index()
