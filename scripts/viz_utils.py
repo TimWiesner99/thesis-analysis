@@ -1234,7 +1234,7 @@ def plot_split_histogram_boxplot(data: pd.DataFrame,
            edgecolor='black', linewidth=0.5)
 
     # Add bin labels to histograms
-    threshold = 0.1 * hist_scale  # Threshold for "too thin" bars
+    threshold = 0.15 * hist_scale  # Threshold for "too thin" bars
     label_offset = 0.02  # Offset for labels outside thin bars
 
     # Add labels to left histogram
@@ -1245,7 +1245,7 @@ def plot_split_histogram_boxplot(data: pd.DataFrame,
 
         # Format label
         if show_counts:
-            label = f"{int(count)} ({percentage:.0f}%)"
+            label = f"{int(count)}\n({percentage:.0f}%)"
         else:
             label = f"{percentage:.0f}%"
 
@@ -1263,7 +1263,7 @@ def plot_split_histogram_boxplot(data: pd.DataFrame,
 
         # Add text
         ax.text(x_pos, y_pos, label, ha=ha, va='center',
-               fontsize=STYLE_CONFIG['tick_size'] - 1,
+               fontsize=STYLE_CONFIG['tick_size'] - 2,
                color='black', fontweight='bold')
 
     # Add labels to right histogram
@@ -1274,7 +1274,7 @@ def plot_split_histogram_boxplot(data: pd.DataFrame,
 
         # Format label
         if show_counts:
-            label = f"{int(count)} ({percentage:.0f}%)"
+            label = f"{int(count)}\n({percentage:.0f}%)"
         else:
             label = f"{percentage:.0f}%"
 
@@ -1292,7 +1292,7 @@ def plot_split_histogram_boxplot(data: pd.DataFrame,
 
         # Add text
         ax.text(x_pos, y_pos, label, ha=ha, va='center',
-               fontsize=STYLE_CONFIG['tick_size'] - 1,
+               fontsize=STYLE_CONFIG['tick_size'] - 2,
                color='black', fontweight='bold')
 
     # Plot central boxplots
@@ -1334,7 +1334,7 @@ def plot_split_histogram_boxplot(data: pd.DataFrame,
                  zorder=3)
 
     # Add statistical annotations if requested
-    box_shift = 0.1 # amount by which the statistics box is shifted to the left
+    box_shift = normalized_counts2[-1] *0.6 + 0.1  # amount by which the statistics box is shifted to the left
     if show_stats:
         # Calculate effect size (Cohen's d) and p-value (t-test)
         effect_size = cohens_d(group1_data, group2_data)
@@ -1343,7 +1343,7 @@ def plot_split_histogram_boxplot(data: pd.DataFrame,
         # Add text box with effect size and p-value
         textstr = f"δ = {effect_size:.4f}\nα = {p_value:.4f}"
         props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-        ax.text(1-box_shift, 0.98, textstr, transform=ax.transAxes,
+        ax.text(1-box_shift, 0.96, textstr, transform=ax.transAxes,
                fontsize=STYLE_CONFIG['font_size'], verticalalignment='top',
                horizontalalignment='right', bbox=props)
 
