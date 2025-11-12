@@ -4,6 +4,8 @@ This module provides consistent, clean visualization functions for different dat
 - Likert scale items and computed scales (histogram + KDE)
 - Categorical variables (bar plots with readable labels)
 - Continuous variables (histogram + KDE)
+- Boxplots and mirrored histograms for multi-scale comparisons
+- Split histogram with central boxplot for two-group comparisons
 
 All functions support optional grouping by experimental condition.
 """
@@ -735,11 +737,14 @@ def plot_boxplot(data: pd.DataFrame,
                  show_stats: bool = True,
                  use_full_labels: bool = False,
                  short_labels: Optional[List[str]] = None,
-                 title_pad: Optional[int] = None) -> plt.Axes:
+                 title_pad: Optional[int] = None,
+                 mirror_hist: bool = False,
+                 bins: Optional[int] = None,
+                 show_mean: bool = False) -> plt.Axes:
     """
-    Plot boxplots for multiple items, optionally comparing experimental groups.
+    Plot boxplots or mirrored histograms for multiple items, optionally comparing experimental groups.
 
-    When comparing groups, boxes are grouped by item with group comparisons side-by-side.
+    When comparing groups, boxes/histograms are grouped by item with group comparisons side-by-side.
     All items share the same y-axis scale for easy comparison (ideal for Likert scales).
 
     Args:
@@ -752,6 +757,9 @@ def plot_boxplot(data: pd.DataFrame,
         use_full_labels: If True, use full labels from labels.csv; if False, use short_labels or column names
         short_labels: Optional list of short labels for x-axis (must match length of columns)
         title_pad: Padding between title and plot (auto-increased when showing stats to prevent overlap)
+        mirror_hist: If True, plot mirrored histograms instead of boxplots (ideal for Likert data) (default: False)
+        bins: Number of bins for mirrored histograms (auto-detected from data if None) (default: None)
+        show_mean: If True, mark the mean on mirrored histograms with a diamond marker (default: False)
 
     Returns:
         The matplotlib axes object
@@ -759,6 +767,9 @@ def plot_boxplot(data: pd.DataFrame,
     Note:
         When show_stats=True and group_by is specified, title padding is automatically increased
         to prevent statistical annotations from overlapping with the title.
+
+        Mirrored histograms are particularly useful for Likert scale data as they show discrete bins
+        clearly (unlike violin plots which use continuous KDE).
 
     Example:
         >>> # Simple boxplot with short labels
@@ -773,6 +784,16 @@ def plot_boxplot(data: pd.DataFrame,
         >>> plot_boxplot(data, ['tia_rc', 'tia_up'],
         ...              group_by='stimulus_group',
         ...              use_full_labels=True)
+
+        >>> # Mirrored histograms (ideal for Likert scales)
+        >>> plot_boxplot(data, ['tia_rc', 'tia_up', 'tia_f'],
+        ...              group_by='stimulus_group',
+        ...              mirror_hist=True)
+
+        >>> # Mirrored histograms with mean markers
+        >>> plot_boxplot(data, ['tia_rc', 'tia_up', 'tia_f'],
+        ...              group_by='stimulus_group',
+        ...              mirror_hist=True, show_mean=True)
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -831,7 +852,36 @@ def plot_boxplot(data: pd.DataFrame,
         effect_sizes = []
         p_values = []
 
-        # Plot boxes for each group
+        # Compute histogram bins once for all groups (if using mirrored histograms)
+        if mirror_hist:
+            # Compute histogram range across all data for consistent bins
+            all_col_data = pd.concat([data[col].dropna() for col in columns])
+            hist_range = (all_col_data.min(), all_col_data.max())
+
+            # Determine number of bins
+            if bins is None:
+                # Auto-detect from unique values (ideal for Likert scales)
+                n_bins = len(all_col_data.unique())
+            else:
+                n_bins = bins
+
+            # Compute bin edges (shared across all histograms and groups)
+            bin_edges = np.linspace(hist_range[0], hist_range[1], n_bins + 1)
+            bin_heights = np.diff(bin_edges)  # Height of each bar
+            bin_centers = bin_edges[:-1] + bin_heights / 2  # Center y-position of each bar
+
+            # Calculate global maximum count for normalization (shared scale across all histograms)
+            global_max_count = 0
+            for group in groups:
+                for col in columns:
+                    col_data = data[data[group_by] == group][col].dropna()
+                    counts, _ = np.histogram(col_data, bins=bin_edges, range=hist_range)
+                    global_max_count = max(global_max_count, counts.max())
+
+            # Compute scale factor so widest bar fits within allocated width
+            scale_factor = (width * 0.4) / global_max_count if global_max_count > 0 else 1.0
+
+        # Plot boxes/histograms for each group
         for group_idx, group in enumerate(groups):
             # Get readable label for group
             try:
@@ -844,28 +894,61 @@ def plot_boxplot(data: pd.DataFrame,
 
             # Collect data for this group across all items
             group_data = []
+            group_means = []
             for col in columns:
                 col_data = data[data[group_by] == group][col].dropna()
                 group_data.append(col_data)
+                group_means.append(col_data.mean())
 
-            # Plot boxplots for this group
-            bp = ax.boxplot(group_data,
-                           positions=group_positions[group],
-                           widths=width,
-                           patch_artist=True,
-                           labels=['' for _ in columns],  # No labels on individual boxes
-                           showfliers=True,  # Show outliers
-                           flierprops=dict(marker='o', markerfacecolor=color,
-                                         markersize=4, alpha=0.5,
-                                         markeredgecolor=color),
-                           medianprops=dict(color='black', linewidth=1.5),
-                           boxprops=dict(facecolor=color, alpha=STYLE_CONFIG['hist_alpha'],
-                                       edgecolor='black', linewidth=1),
-                           whiskerprops=dict(color='black', linewidth=1),
-                           capprops=dict(color='black', linewidth=1))
+            if mirror_hist:
+                # Plot mirrored histograms for this group
+                # Plot histogram for each item in this group
+                for col_idx, (col, x_pos) in enumerate(zip(columns, group_positions[group])):
+                    col_data = group_data[col_idx]
 
-            # Add to legend (just once per group)
-            bp['boxes'][0].set_label(group_label)
+                    # Compute histogram counts
+                    counts, _ = np.histogram(col_data, bins=bin_edges, range=hist_range)
+
+                    # Normalize counts using global scale factor
+                    normalized_counts = counts * scale_factor
+
+                    # Plot symmetric horizontal bars
+                    lefts = x_pos - 0.5 * normalized_counts
+                    ax.barh(bin_centers, normalized_counts, height=bin_heights, left=lefts,
+                           color=color, alpha=STYLE_CONFIG['hist_alpha'],
+                           edgecolor='black', linewidth=0.5)
+
+                # Add mean markers if requested
+                if show_mean:
+                    ax.scatter(group_positions[group], group_means,
+                             marker='D', color='white', s=50,
+                             edgecolors=color, linewidths=2,
+                             zorder=3, label=group_label if group_idx == 0 else '')
+
+                # Add invisible line for legend
+                if not show_mean:
+                    ax.plot([], [], color=color, linewidth=10,
+                           alpha=STYLE_CONFIG['hist_alpha'],
+                           label=group_label)
+            else:
+                # Plot boxplots for this group
+                bp = ax.boxplot(group_data,
+                               positions=group_positions[group],
+                               widths=width,
+                               patch_artist=True,
+                               labels=['' for _ in columns],  # No labels on individual boxes
+                               showfliers=True,  # Show outliers
+                               flierprops=dict(marker='o', markerfacecolor=color,
+                                             markersize=4, alpha=0.5,
+                                             markeredgecolor=color),
+                               medianprops=dict(color='black', linewidth=1.5),
+                               boxprops=dict(facecolor=color, alpha=STYLE_CONFIG['hist_alpha'],
+                                           edgecolor='black', linewidth=1),
+                               whiskerprops=dict(color='black', linewidth=1),
+                               capprops=dict(color='black', linewidth=1))
+
+                # Add to legend (just once per group)
+                bp['boxes'][0].set_label(group_label)
 
         # Calculate effect sizes and p-values if comparing two groups
         if show_stats and n_groups == 2:
@@ -912,24 +995,84 @@ def plot_boxplot(data: pd.DataFrame,
         ax.legend(frameon=False, fontsize=STYLE_CONFIG['font_size'])
 
     else:
-        # Single boxplot (no grouping)
+        # Single boxplot/mirrored histogram (no grouping)
         plot_data = [data[col].dropna() for col in columns]
+        plot_means = [data[col].dropna().mean() for col in columns]
 
-        bp = ax.boxplot(plot_data,
-                       labels=x_labels,
-                       patch_artist=True,
-                       showfliers=True,
-                       flierprops=dict(marker='o', markerfacecolor=COLORS['primary'],
-                                     markersize=4, alpha=0.5,
-                                     markeredgecolor=COLORS['primary']),
-                       medianprops=dict(color='black', linewidth=1.5),
-                       boxprops=dict(facecolor=COLORS['primary'],
-                                   alpha=STYLE_CONFIG['hist_alpha'],
-                                   edgecolor='black', linewidth=1),
-                       whiskerprops=dict(color='black', linewidth=1),
-                       capprops=dict(color='black', linewidth=1))
+        if mirror_hist:
+            # Plot mirrored histograms
+            # Compute histogram range across all data for consistent bins
+            all_col_data = pd.concat([data[col].dropna() for col in columns])
+            hist_range = (all_col_data.min(), all_col_data.max())
 
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+            # Determine number of bins
+            if bins is None:
+                # Auto-detect from unique values (ideal for Likert scales)
+                n_bins = len(all_col_data.unique())
+            else:
+                n_bins = bins
+
+            # Compute bin edges (shared across all histograms)
+            bin_edges = np.linspace(hist_range[0], hist_range[1], n_bins + 1)
+            bin_heights = np.diff(bin_edges)  # Height of each bar
+            bin_centers = bin_edges[:-1] + bin_heights / 2  # Center y-position of each bar
+
+            # Calculate global maximum count for normalization (shared scale across all histograms)
+            global_max_count = 0
+            for col_idx, col in enumerate(columns):
+                counts_temp, _ = np.histogram(plot_data[col_idx], bins=bin_edges, range=hist_range)
+                global_max_count = max(global_max_count, counts_temp.max())
+
+            # Compute scale factor so widest bar fits within allocated width
+            # For single plots, use a fixed width value similar to boxplots
+            width_single = 0.35
+            scale_factor = (width_single * 0.4) / global_max_count if global_max_count > 0 else 1.0
+
+            # Plot histogram for each item
+            for col_idx, col in enumerate(columns):
+                col_data = plot_data[col_idx]
+                x_pos = col_idx + 1  # Position 1, 2, 3, ...
+
+                # Compute histogram counts
+                counts, _ = np.histogram(col_data, bins=bin_edges, range=hist_range)
+
+                # Normalize counts using global scale factor
+                normalized_counts = counts * scale_factor
+
+                # Plot symmetric horizontal bars
+                lefts = x_pos - 0.5 * normalized_counts
+                ax.barh(bin_centers, normalized_counts, height=bin_heights, left=lefts,
+                       color=COLORS['primary'], alpha=STYLE_CONFIG['hist_alpha'],
+                       edgecolor='black', linewidth=0.5)
+
+            # Add mean markers if requested
+            if show_mean:
+                ax.scatter(range(1, len(columns) + 1), plot_means,
+                         marker='D', color='white', s=50,
+                         edgecolors=COLORS['primary'], linewidths=2,
+                         zorder=3, label='Mean')
+                ax.legend(frameon=False, fontsize=STYLE_CONFIG['font_size'])
+
+            # Set x-tick labels
+            ax.set_xticks(range(1, len(columns) + 1))
+            ax.set_xticklabels(x_labels, rotation=45, ha='right')
+        else:
+            # Plot boxplots
+            bp = ax.boxplot(plot_data,
+                           labels=x_labels,
+                           patch_artist=True,
+                           showfliers=True,
+                           flierprops=dict(marker='o', markerfacecolor=COLORS['primary'],
+                                         markersize=4, alpha=0.5,
+                                         markeredgecolor=COLORS['primary']),
+                           medianprops=dict(color='black', linewidth=1.5),
+                           boxprops=dict(facecolor=COLORS['primary'],
+                                       alpha=STYLE_CONFIG['hist_alpha'],
+                                       edgecolor='black', linewidth=1),
+                           whiskerprops=dict(color='black', linewidth=1),
+                           capprops=dict(color='black', linewidth=1))
+
+            plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
 
     # Apply styling
     # Increase title padding if showing statistical annotations to prevent overlap
@@ -938,6 +1081,321 @@ def plot_boxplot(data: pd.DataFrame,
 
     apply_consistent_style(ax, title=title, xlabel='Items',
                           ylabel='Score', title_pad=title_pad)
+
+    return ax
+
+
+def plot_split_histogram_boxplot(data: pd.DataFrame,
+                                  column: str,
+                                  group_by: str,
+                                  title: Optional[str] = None,
+                                  ylabel: Optional[str] = None,
+                                  ax: Optional[plt.Axes] = None,
+                                  bins: Optional[int] = None,
+                                  show_mean: bool = True,
+                                  show_stats: bool = True,
+                                  show_counts: bool = False,
+                                  hist_scale: float = 0.4,
+                                  title_pad: Optional[int] = None) -> plt.Axes:
+    """
+    Plot split histogram with central boxplot for comparing two groups on a single scale.
+
+    Layout:
+    - Left: Histogram of group 1 (extending leftward)
+    - Center: Boxplots of both groups with optional mean markers
+    - Right: Histogram of group 2 (extending rightward)
+
+    All elements share the same y-axis scale, making it easy to compare distributions.
+    Ideal for visualizing Likert scale data with group comparisons.
+
+    Args:
+        data: DataFrame containing the data
+        column: Column name to plot (e.g., 'tia_rc')
+        group_by: Column to group by (must have exactly 2 groups, e.g., 'stimulus_group')
+        title: Plot title (auto-generated if None)
+        ylabel: Optional custom y-axis label (auto-detected from column name if None)
+        ax: Optional matplotlib axes (creates new figure if None)
+        bins: Number of histogram bins (auto-detected from unique values if None)
+        show_mean: If True, mark the mean on boxplots with a diamond marker (default: True)
+        show_stats: Whether to show Cohen's d and p-value (default: True)
+        show_counts: If True, show "N (X%)" format; if False, show "X%" only (default: False)
+        hist_scale: Maximum histogram width as proportion of plot (default: 0.4)
+        title_pad: Padding between title and plot (uses STYLE_CONFIG default if None)
+
+    Returns:
+        The matplotlib axes object
+
+    Raises:
+        ValueError: If group_by column does not have exactly 2 groups
+
+    Example:
+        >>> # Basic usage
+        >>> plot_split_histogram_boxplot(data, 'tia_rc', group_by='stimulus_group')
+
+        >>> # With custom bins and wider histograms
+        >>> plot_split_histogram_boxplot(data, 'tia_rc', group_by='stimulus_group',
+        ...                              bins=7, hist_scale=0.6)
+
+        >>> # Without statistics
+        >>> plot_split_histogram_boxplot(data, 'tia_rc', group_by='stimulus_group',
+        ...                              show_stats=False, show_mean=False)
+
+        >>> # With absolute counts and percentages
+        >>> plot_split_histogram_boxplot(data, 'tia_rc', group_by='stimulus_group',
+        ...                              show_counts=True)
+    """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Generate title if not provided
+    if title is None:
+        title = f"Distribution of {column.upper()}"
+
+    # Validate that we have exactly 2 groups
+    groups = sorted(data[group_by].dropna().unique())
+    if len(groups) != 2:
+        raise ValueError(f"group_by column '{group_by}' must have exactly 2 groups. Found {len(groups)}: {groups}")
+
+    # Extract data for each group
+    group1_data = data[data[group_by] == groups[0]][column].dropna()
+    group2_data = data[data[group_by] == groups[1]][column].dropna()
+
+    # Get readable labels for groups
+    try:
+        group1_label = get_label_for_value(group_by, groups[0])
+    except (ValueError, KeyError):
+        group1_label = str(groups[0])
+
+    try:
+        group2_label = get_label_for_value(group_by, groups[1])
+    except (ValueError, KeyError):
+        group2_label = str(groups[1])
+
+    # Choose colors
+    color1 = COLORS.get(group1_label.lower(), COLORS['primary'])
+    color2 = COLORS.get(group2_label.lower(), COLORS['secondary'])
+
+    # Setup y-axis scale (shared across all elements)
+    all_data = pd.concat([group1_data, group2_data])
+    data_range = (all_data.min(), all_data.max())
+
+    # Determine number of bins
+    if bins is None:
+        # Auto-detect from unique values (ideal for Likert scales)
+        n_bins = len(all_data.unique())
+    else:
+        n_bins = bins
+
+    # Compute bin edges (shared y-axis)
+    # Extend edges by 0.5 on each side to center bins on integer values
+    # For Likert 1-5: bins at [0.5, 1.5, 2.5, 3.5, 4.5, 5.5], centers at [1, 2, 3, 4, 5]
+    bin_edges = np.linspace(data_range[0] - 0.5, data_range[1] + 0.5, n_bins + 1)
+    bin_heights = np.diff(bin_edges)  # Height of each bar
+    bin_centers = bin_edges[:-1] + bin_heights / 2  # Center y-position of each bar
+
+    # Compute histogram counts for both groups
+    hist_range = (bin_edges[0], bin_edges[-1])
+    counts1, _ = np.histogram(group1_data, bins=bin_edges, range=hist_range)
+    counts2, _ = np.histogram(group2_data, bins=bin_edges, range=hist_range)
+
+    # Calculate normalization factor (shared scale for fair comparison)
+    global_max_count = max(counts1.max(), counts2.max())
+    scale_factor = hist_scale / global_max_count if global_max_count > 0 else 1.0
+
+    # Normalize counts
+    normalized_counts1 = counts1 * scale_factor
+    normalized_counts2 = counts2 * scale_factor
+
+    # Define boxplot positions (needed for histogram positioning calculations)
+    boxplot_width = 0.25
+    box_positions = [-0.15, 0.15]
+
+    # Calculate histogram positions to avoid boxplot overlap and touch plot edges
+    gap = 0.05  # Gap between histogram and boxplot
+    left_hist_inner = box_positions[0] - boxplot_width/2 - gap
+    right_hist_inner = box_positions[1] + boxplot_width/2 + gap
+
+    # Anchor points for histograms (outer edges)
+    left_anchor = left_hist_inner - hist_scale
+    right_anchor = right_hist_inner + hist_scale
+
+    # Plot left histogram (group 1, extending rightward towards center)
+    # All bars start from left_anchor and extend right by their normalized count
+    lefts1 = left_anchor
+    ax.barh(bin_centers, normalized_counts1, height=bin_heights, left=lefts1,
+           color=color1, alpha=STYLE_CONFIG['hist_alpha'],
+           edgecolor='black', linewidth=0.5)
+
+    # Plot right histogram (group 2, extending leftward towards center)
+    # All bars end at right_anchor and extend left by their normalized count
+    lefts2 = right_anchor - normalized_counts2
+    ax.barh(bin_centers, normalized_counts2, height=bin_heights, left=lefts2,
+           color=color2, alpha=STYLE_CONFIG['hist_alpha'],
+           edgecolor='black', linewidth=0.5)
+
+    # Add bin labels to histograms
+    threshold = 0.1 * hist_scale  # Threshold for "too thin" bars
+    label_offset = 0.02  # Offset for labels outside thin bars
+
+    # Add labels to left histogram
+    for i, (count, normalized_count) in enumerate(zip(counts1, normalized_counts1)):
+        # Calculate percentage
+        total_count1 = counts1.sum()
+        percentage = (count / total_count1 * 100) if total_count1 > 0 else 0
+
+        # Format label
+        if show_counts:
+            label = f"{int(count)} ({percentage:.0f}%)"
+        else:
+            label = f"{percentage:.0f}%"
+
+        # Determine position based on bar width
+        if normalized_count >= threshold:
+            # Inside bar, centered
+            x_pos = left_anchor + normalized_count / 2
+            ha = 'center'
+        else:
+            # Outside bar, towards center
+            x_pos = left_anchor + normalized_count + label_offset
+            ha = 'left'
+
+        y_pos = bin_centers[i]
+
+        # Add text
+        ax.text(x_pos, y_pos, label, ha=ha, va='center',
+               fontsize=STYLE_CONFIG['tick_size'] - 1,
+               color='black', fontweight='bold')
+
+    # Add labels to right histogram
+    for i, (count, normalized_count) in enumerate(zip(counts2, normalized_counts2)):
+        # Calculate percentage
+        total_count2 = counts2.sum()
+        percentage = (count / total_count2 * 100) if total_count2 > 0 else 0
+
+        # Format label
+        if show_counts:
+            label = f"{int(count)} ({percentage:.0f}%)"
+        else:
+            label = f"{percentage:.0f}%"
+
+        # Determine position based on bar width
+        if normalized_count >= threshold:
+            # Inside bar, centered
+            x_pos = right_anchor - normalized_count / 2
+            ha = 'center'
+        else:
+            # Outside bar, towards center
+            x_pos = right_anchor - normalized_count - label_offset
+            ha = 'right'
+
+        y_pos = bin_centers[i]
+
+        # Add text
+        ax.text(x_pos, y_pos, label, ha=ha, va='center',
+               fontsize=STYLE_CONFIG['tick_size'] - 1,
+               color='black', fontweight='bold')
+
+    # Plot central boxplots
+    bp = ax.boxplot([group1_data, group2_data],
+                    positions=box_positions,
+                    widths=boxplot_width,
+                    patch_artist=True,
+                    vert=True,  # Vertical boxplots
+                    showfliers=True,
+                    flierprops=dict(marker='o', markersize=4, alpha=0.5),
+                    medianprops=dict(color='black', linewidth=1.5),
+                    whiskerprops=dict(color='black', linewidth=1),
+                    capprops=dict(color='black', linewidth=1))
+
+    # Color the boxplots
+    bp['boxes'][0].set_facecolor(color1)
+    bp['boxes'][0].set_alpha(STYLE_CONFIG['hist_alpha'])
+    bp['boxes'][0].set_edgecolor('black')
+    bp['boxes'][0].set_linewidth(1)
+
+    bp['boxes'][1].set_facecolor(color2)
+    bp['boxes'][1].set_alpha(STYLE_CONFIG['hist_alpha'])
+    bp['boxes'][1].set_edgecolor('black')
+    bp['boxes'][1].set_linewidth(1)
+
+    # Color outliers
+    bp['fliers'][0].set_markerfacecolor(color1)
+    bp['fliers'][0].set_markeredgecolor(color1)
+    bp['fliers'][1].set_markerfacecolor(color2)
+    bp['fliers'][1].set_markeredgecolor(color2)
+
+    # Add mean markers if requested
+    if show_mean:
+        mean1 = group1_data.mean()
+        mean2 = group2_data.mean()
+        ax.scatter([box_positions[0], box_positions[1]], [mean1, mean2],
+                 marker='D', color='white', s=50,
+                 edgecolors=[color1, color2], linewidths=2,
+                 zorder=3)
+
+    # Add statistical annotations if requested
+    box_shift = 0.1 # amount by which the statistics box is shifted to the left
+    if show_stats:
+        # Calculate effect size (Cohen's d) and p-value (t-test)
+        effect_size = cohens_d(group1_data, group2_data)
+        p_value = independent_t_test(group1_data, group2_data)
+
+        # Add text box with effect size and p-value
+        textstr = f"δ = {effect_size:.4f}\nα = {p_value:.4f}"
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+        ax.text(1-box_shift, 0.98, textstr, transform=ax.transAxes,
+               fontsize=STYLE_CONFIG['font_size'], verticalalignment='top',
+               horizontalalignment='right', bbox=props)
+
+    # Set axis limits (tight to histogram edges with small margin)
+    margin = 0.05
+    ax.set_xlim(left_anchor - margin, right_anchor + margin)
+
+    # Set y-axis limits based on bin edges (already includes proper range for centered bins)
+    ax.set_ylim(bin_edges[0], bin_edges[-1])
+
+    # Apply styling
+    if ylabel is None:
+        # Auto-detect y-axis label from column name
+        ylabel = column.replace('_', ' ').title()
+        try:
+            # Try to get better label from questions.csv
+            question_label = questions[questions['item'] == column]['question'].values
+            if len(question_label) > 0:
+                ylabel = truncate_label(question_label[0], max_length=40)
+        except:
+            pass
+
+    apply_consistent_style(ax, title=title, xlabel='',
+                          ylabel=ylabel, title_pad=title_pad)
+
+    # Remove x-axis ticks (not using tick labels)
+    ax.set_xticks([])
+
+    # Add group labels below x-axis (positioned at 25% and 75% of x-axis)
+    # Calculate x-axis range and label positions
+    x_min = left_anchor - margin
+    x_max = right_anchor + margin
+    x_range = x_max - x_min
+    label_x_1 = x_min + 0.25 * x_range  # 25% from left edge
+    label_x_2 = x_min + 0.75 * x_range  # 75% from left edge
+
+    # Add vertical offset for spacing between x-axis and labels
+    y_range = bin_edges[-1] - bin_edges[0]
+    label_y_offset = 0.05 * y_range
+    label_y_position = bin_edges[0] - label_y_offset
+
+    ax.text(label_x_1, label_y_position, group1_label,
+           ha='center', va='top',
+           fontsize=STYLE_CONFIG['label_size'],
+           color=color1,
+           fontweight='bold')
+
+    ax.text(label_x_2, label_y_position, group2_label,
+           ha='center', va='top',
+           fontsize=STYLE_CONFIG['label_size'],
+           color=color2,
+           fontweight='bold')
 
     return ax
 
@@ -1075,6 +1533,54 @@ plt.show()
 plot_boxplot(data, ['tia_rc', 'tia_up'],
              group_by='stimulus_group',
              use_full_labels=True)
+plt.show()
+
+# 5d. Mirrored histograms instead of boxplots (ideal for Likert scales)
+plot_boxplot(data, ['tia_rc', 'tia_up', 'tia_f', 'tia_pro', 'tia_t'],
+             group_by='stimulus_group',
+             short_labels=['Reliability', 'Understanding', 'Familiarity', 'Propensity', 'Trust'],
+             mirror_hist=True)
+plt.show()
+
+# 5e. Mirrored histograms with mean markers
+plot_boxplot(data, ['tia_rc', 'tia_up', 'tia_f'],
+             group_by='stimulus_group',
+             short_labels=['R/C', 'U/P', 'Fam'],
+             mirror_hist=True, show_mean=True,
+             title='Trust in Automation Subscales (with means)')
+plt.show()
+
+# 5f. Mirrored histograms with custom bin count
+plot_boxplot(data, ['tia_rc', 'tia_up'],
+             group_by='stimulus_group',
+             short_labels=['Reliability', 'Understanding'],
+             mirror_hist=True, bins=7,
+             title='Custom bin count example')
+plt.show()
+
+# 5g. Split histogram with central boxplot (new visualization type!)
+# Perfect for comparing two groups on a single scale
+# Left histogram + central boxplots + right histogram
+plot_split_histogram_boxplot(data, 'tia_rc', group_by='stimulus_group',
+                             title='Trust in Automation: Reliability/Confidence')
+plt.show()
+
+# 5h. Split histogram without statistics, no mean markers
+plot_split_histogram_boxplot(data, 'tia_up', group_by='stimulus_group',
+                             show_stats=False, show_mean=False,
+                             title='Trust in Automation: Understanding/Predictability')
+plt.show()
+
+# 5i. Split histogram with wider histograms
+plot_split_histogram_boxplot(data, 'tia_f', group_by='stimulus_group',
+                             hist_scale=0.6,  # Wider histograms (60% of plot width)
+                             title='Trust in Automation: Familiarity')
+plt.show()
+
+# 5j. Split histogram with custom bins
+plot_split_histogram_boxplot(data, 'ati', group_by='stimulus_group',
+                             bins=7,  # Use 7 bins instead of auto-detected
+                             title='Affinity for Technology Interaction')
 plt.show()
 
 # 6. Customize colors
