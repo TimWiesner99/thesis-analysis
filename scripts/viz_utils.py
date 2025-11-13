@@ -6,6 +6,7 @@ This module provides consistent, clean visualization functions for different dat
 - Continuous variables (histogram + KDE)
 - Boxplots and mirrored histograms for multi-scale comparisons
 - Split histogram with central boxplot for two-group comparisons
+- Scatterplots with correlation analysis for examining relationships between variables
 
 All functions support optional grouping by experimental condition.
 """
@@ -16,7 +17,10 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Optional, Tuple, List
 from .utils import get_label_for_value, get_question_statement
-from .stats import cohens_d, independent_t_test, chi_square_test, cramers_v
+from .stats import (cohens_d, independent_t_test, chi_square_test, cramers_v,
+                     fisher_exact_test, one_way_anova, eta_squared,
+                     mann_whitney_u_test, rank_biserial_correlation,
+                     kruskal_wallis_test, pearson_correlation, spearman_correlation)
 
 # Load metadata
 DATA_PATH = Path(__file__).parent.parent / "data"
@@ -33,6 +37,20 @@ COLORS = {
     'uncertainty': '#D65F57',  # For uncertainty group
 }
 
+# Extended color palette for multiple groups (used when no specific color is defined)
+DEFAULT_PALETTE = [
+    '#578ED6',  # Blue
+    '#D65F57',  # Red/Pink
+    '#F18F01',  # Orange
+    '#66C2A5',  # Teal
+    '#8E44AD',  # Purple
+    '#E67E22',  # Dark Orange
+    '#3498DB',  # Light Blue
+    '#E74C3C',  # Red
+    '#95A5A6',  # Gray
+    '#16A085',  # Dark Teal
+]
+
 # Style configuration
 STYLE_CONFIG = {
     'font_size': 11,
@@ -45,6 +63,36 @@ STYLE_CONFIG = {
     'title_pad': 15,  # Space between title and plot
     'max_label_length': 25,  # Maximum characters for axis labels before truncation
 }
+
+
+def get_group_colors(group_labels: List[str]) -> List[str]:
+    """
+    Get colors for a list of group labels.
+
+    Uses predefined colors from COLORS dict if available, otherwise assigns
+    colors from DEFAULT_PALETTE in order.
+
+    Args:
+        group_labels: List of group label strings
+
+    Returns:
+        List of color strings (hex codes) matching the group_labels
+
+    Example:
+        >>> get_group_colors(['control', 'uncertainty'])
+        ['#578ED6', '#D65F57']
+        >>> get_group_colors(['English', 'Dutch', 'German'])
+        ['#578ED6', '#D65F57', '#F18F01']
+    """
+    colors = []
+    for idx, label in enumerate(group_labels):
+        # First check if there's a predefined color for this label
+        color = COLORS.get(label.lower(), None)
+        if color is None:
+            # Use color from default palette, cycling if needed
+            color = DEFAULT_PALETTE[idx % len(DEFAULT_PALETTE)]
+        colors.append(color)
+    return colors
 
 
 def truncate_label(label: str, max_length: int = None) -> str:
@@ -101,6 +149,263 @@ def get_readable_labels(column_name: str, values: List, trunc: int = 20) -> List
     return readable
 
 
+def _format_p_value(p_value: float) -> str:
+    """
+    Format p-value for display in plots using APA style.
+
+    Args:
+        p_value: The p-value to format (float between 0 and 1)
+
+    Returns:
+        Formatted p-value string in APA style (no leading zero)
+
+    Example:
+        >>> _format_p_value(0.0234)
+        'p = .023'
+        >>> _format_p_value(0.0001)
+        'p < .001'
+        >>> _format_p_value(0.159)
+        'p = .159'
+    """
+    if p_value < 0.001:
+        return "p < .001"
+    else:
+        # Format with 3 decimal places, remove leading zero
+        return f"p = {p_value:.3f}".replace("0.", ".")
+
+
+def _print_statistical_report(test_type: str,
+                              variable_name: str,
+                              group_stats: dict,
+                              test_stats: dict) -> None:
+    """
+    Print comprehensive statistical test results to console in APA-style format.
+
+    This internal helper function formats and displays statistical test results
+    with group descriptive statistics, test statistics, and interpretation hints.
+    Output is designed to be copy-paste ready for manuscripts.
+
+    Args:
+        test_type: Type of statistical test ('t-test', 'anova', 'chi-square')
+        variable_name: Name of the variable/column being tested
+        group_stats: Dictionary containing group descriptive statistics
+                    Format for t-test/anova: {group_name: {'n': int, 'mean': float, 'sd': float}}
+                    Format for chi-square: {group_name: {'n': int}}
+        test_stats: Dictionary containing test statistics
+                   For t-test: {'t': float, 'p': float, 'df': float, 'd': float}
+                   For anova: {'F': float, 'p': float, 'df1': int, 'df2': int}
+                   For chi-square: {'chi2': float, 'p': float, 'df': int, 'V': float}
+
+    Example:
+        >>> group_stats = {'Control': {'n': 45, 'mean': 3.21, 'sd': 0.89},
+        ...                'Uncertainty': {'n': 43, 'mean': 3.45, 'sd': 0.76}}
+        >>> test_stats = {'t': -1.42, 'p': 0.159, 'df': 83.45, 'd': 0.29}
+        >>> _print_statistical_report('t-test', 'ati', group_stats, test_stats)
+    """
+    # Format p-value in APA style (no leading zero)
+    def format_p(p_value: float) -> str:
+        if p_value < 0.001:
+            return "< .001"
+        else:
+            return f"= {p_value:.3f}".replace("0.", ".")
+
+    # Determine significance level for interpretation
+    def get_interpretation(p_value: float) -> str:
+        if p_value < 0.001:
+            return "highly significant (p < .001)"
+        elif p_value < 0.01:
+            return "very significant (p < .01)"
+        elif p_value < 0.05:
+            return "significant (p < .05)"
+        else:
+            return "not significant (p ≥ .05)"
+
+    print(f"\nStatistical Test Results for '{variable_name}':")
+
+    # Print group descriptive statistics
+    if test_type in ['t-test', 'anova']:
+        print("  Group Descriptive Statistics:")
+        for group_name, stats in group_stats.items():
+            n = stats['n']
+            mean = stats['mean']
+            sd = stats['sd']
+            print(f"    {group_name}: n = {n}, M = {mean:.2f}, SD = {sd:.2f}")
+
+    elif test_type in ['mann-whitney', 'kruskal-wallis']:
+        print("  Group Descriptive Statistics:")
+        for group_name, stats in group_stats.items():
+            n = stats['n']
+            # Non-parametric tests typically report median, but also support mean for consistency
+            if 'median' in stats:
+                median = stats['median']
+                if 'iqr' in stats:
+                    iqr = stats['iqr']
+                    print(f"    {group_name}: n = {n}, Mdn = {median:.2f}, IQR = {iqr:.2f}")
+                else:
+                    print(f"    {group_name}: n = {n}, Mdn = {median:.2f}")
+            else:
+                # Fallback to mean/SD if median not provided
+                mean = stats['mean']
+                sd = stats['sd']
+                print(f"    {group_name}: n = {n}, M = {mean:.2f}, SD = {sd:.2f}")
+
+    elif test_type == 'chi-square':
+        print("  Group Sample Sizes:")
+        for group_name, stats in group_stats.items():
+            n = stats['n']
+            print(f"    {group_name}: n = {n}")
+
+    # Print test results in APA format
+    print("  Test: ", end="")
+
+    if test_type == 't-test':
+        print("Independent samples t-test (Welch's)")
+        t = test_stats['t']
+        p = test_stats['p']
+        df = test_stats['df']
+        d = test_stats['d']
+
+        # APA format: t(df) = X.XX, p = .XXX, d = X.XX
+        print(f"  Result: t({df:.1f}) = {t:.2f}, p {format_p(p)}, d = {d:.2f}")
+        print(f"  Interpretation: {get_interpretation(p)}")
+
+    elif test_type == 'anova':
+        print("One-way ANOVA")
+        F = test_stats['F']
+        p = test_stats['p']
+        df1 = test_stats['df1']
+        df2 = test_stats['df2']
+
+        # APA format: F(df1, df2) = X.XX, p = .XXX
+        print(f"  Result: F({df1}, {df2}) = {F:.2f}, p {format_p(p)}")
+        print(f"  Interpretation: {get_interpretation(p)}")
+
+    elif test_type == 'mann-whitney':
+        print("Mann-Whitney U test (non-parametric)")
+        U = test_stats['U']
+        p = test_stats['p']
+        r = test_stats['r']
+
+        # APA format: U = X.XX, p = .XXX, r = X.XX
+        print(f"  Result: U = {U:.2f}, p {format_p(p)}, r = {r:.2f}")
+        print(f"  Interpretation: {get_interpretation(p)}")
+
+    elif test_type == 'kruskal-wallis':
+        print("Kruskal-Wallis H test (non-parametric)")
+        H = test_stats['H']
+        p = test_stats['p']
+        df = test_stats['df']
+
+        # APA format: H(df) = X.XX, p = .XXX
+        print(f"  Result: H({df}) = {H:.2f}, p {format_p(p)}")
+        print(f"  Interpretation: {get_interpretation(p)}")
+
+    elif test_type == 'chi-square':
+        print("Chi-square test of independence")
+        chi2 = test_stats['chi2']
+        p = test_stats['p']
+        df = test_stats['df']
+        V = test_stats['V']
+
+        # APA format: χ²(df) = X.XX, p = .XXX, V = X.XX
+        print(f"  Result: χ²({df}) = {chi2:.2f}, p {format_p(p)}, V = {V:.2f}")
+        print(f"  Interpretation: {get_interpretation(p)}")
+
+    elif test_type == 'fisher':
+        print("Fisher's exact test")
+        OR = test_stats['OR']
+        p = test_stats['p']
+
+        # APA format: OR = X.XX, p = .XXX
+        print(f"  Result: OR = {OR:.2f}, p {format_p(p)}")
+        print(f"  Interpretation: {get_interpretation(p)}")
+
+    print()  # Blank line separator
+
+
+def _print_correlation_report(x_var: str,
+                              y_var: str,
+                              correlation_method: str,
+                              correlation_stats: dict,
+                              group_name: Optional[str] = None) -> None:
+    """
+    Print correlation test results to console in APA-style format.
+
+    This internal helper function formats and displays correlation results
+    with sample size, correlation coefficient, and p-value. Output is designed
+    to be copy-paste ready for manuscripts.
+
+    Args:
+        x_var: Name of the x-axis variable
+        y_var: Name of the y-axis variable
+        correlation_method: Type of correlation ('pearson' or 'spearman')
+        correlation_stats: Dictionary containing correlation statistics
+                          Format: {'r': float, 'p': float, 'n': int}
+                          (or {'rho': float, 'p': float, 'n': int} for Spearman)
+        group_name: Optional name of the group (for grouped analyses)
+
+    Example:
+        >>> corr_stats = {'r': 0.456, 'p': 0.001, 'n': 88}
+        >>> _print_correlation_report('age', 'ati', 'pearson', corr_stats)
+    """
+    # Format p-value in APA style (no leading zero)
+    def format_p(p_value: float) -> str:
+        if p_value < 0.001:
+            return "< .001"
+        else:
+            return f"= {p_value:.3f}".replace("0.", ".")
+
+    # Determine correlation strength for interpretation
+    def get_strength(coef: float) -> str:
+        abs_coef = abs(coef)
+        if abs_coef < 0.3:
+            return "weak"
+        elif abs_coef < 0.7:
+            return "moderate"
+        else:
+            return "strong"
+
+    # Determine significance level for interpretation
+    def get_significance(p_value: float) -> str:
+        if p_value < 0.001:
+            return "highly significant (p < .001)"
+        elif p_value < 0.01:
+            return "very significant (p < .01)"
+        elif p_value < 0.05:
+            return "significant (p < .05)"
+        else:
+            return "not significant (p ≥ .05)"
+
+    # Print header
+    if group_name:
+        print(f"\nCorrelation Analysis for '{group_name}':")
+    else:
+        print(f"\nCorrelation Analysis:")
+
+    print(f"  Variables: {x_var} vs {y_var}")
+    print(f"  Sample size: n = {correlation_stats['n']}")
+
+    # Print correlation results based on method
+    if correlation_method == 'pearson':
+        r = correlation_stats['r']
+        p = correlation_stats['p']
+        print(f"  Method: Pearson's r correlation")
+        # APA format: r(n-2) = X.XX, p = .XXX
+        df = correlation_stats['n'] - 2
+        print(f"  Result: r({df}) = {r:.3f}, p {format_p(p)}")
+        print(f"  Interpretation: {get_strength(r)} {('positive' if r > 0 else 'negative')} correlation, {get_significance(p)}")
+    else:  # spearman
+        rho = correlation_stats['rho']
+        p = correlation_stats['p']
+        print(f"  Method: Spearman's ρ (rho) rank correlation")
+        # APA format: ρ(n-2) = X.XX, p = .XXX
+        df = correlation_stats['n'] - 2
+        print(f"  Result: ρ({df}) = {rho:.3f}, p {format_p(p)}")
+        print(f"  Interpretation: {get_strength(rho)} {('positive' if rho > 0 else 'negative')} correlation, {get_significance(p)}")
+
+    print()  # Blank line separator
+
+
 def apply_consistent_style(ax: plt.Axes,
                           title: Optional[str] = None,
                           xlabel: Optional[str] = None,
@@ -146,7 +451,8 @@ def plot_likert_distribution(data: pd.DataFrame,
                              likert_range: int = 5,
                              show_labels: bool = False,
                              trunc: int = 20,
-                             title_pad: Optional[int] = None) -> plt.Axes:
+                             title_pad: Optional[int] = None,
+                             test_method: str = 'parametric') -> plt.Axes:
     """
     Plot distribution of Likert scale items or computed scale scores.
 
@@ -161,11 +467,15 @@ def plot_likert_distribution(data: pd.DataFrame,
         show_stats: Whether to show mean and SD in legend
         show_bars: Whether to show histogram bars (default: True)
         show_kde: Whether to show KDE (kernel density estimate) overlay (default: False)
-        show_correlation: Whether to show Cohen's d (δ) and p-value (α) from t-test between groups (default: True)
+        show_correlation: Whether to show effect size and p-value from statistical test between groups (default: True)
         likert_range: Max value of Likert scale (default: 5, for 1-5 scale)
         show_labels: Whether to show Likert labels on x-axis (e.g., "Strongly disagree") (default: False)
         trunc: Max characters for labels before truncation. -1 = no truncation (default: 20)
         title_pad: Padding between title and plot (uses STYLE_CONFIG default if None)
+        test_method: Statistical test method ('parametric' or 'nonparametric').
+                    - 'parametric': Uses t-test (2 groups) or ANOVA (3+ groups) with Cohen's d or η²
+                    - 'nonparametric': Uses Mann-Whitney U (2 groups) or Kruskal-Wallis (3+ groups) with rank-biserial r
+                    Default: 'parametric'
 
     Returns:
         The matplotlib axes object
@@ -175,6 +485,7 @@ def plot_likert_distribution(data: pd.DataFrame,
         >>> plot_likert_distribution(data, 'ATI_1', likert_range=5, show_labels=True, trunc=15)
         >>> plot_likert_distribution(data, 'ati', group_by='stimulus_group', show_correlation=True)
         >>> plot_likert_distribution(data, 'ati', group_by='stimulus_group', show_bars=False, show_kde=True)
+        >>> plot_likert_distribution(data, 'ati', group_by='stimulus_group', test_method='nonparametric')
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 5))
@@ -297,22 +608,133 @@ def plot_likert_distribution(data: pd.DataFrame,
                        bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor=color, alpha=0.8))
 
         # Calculate and display correlation/effect size between groups if requested
-        if show_correlation and len(group_means) == 2:
-            # Get the two groups
+        if show_correlation and len(group_means) >= 2:
+            # Get all groups
             group_names = list(group_means.keys())
-            group1_data = group_means[group_names[0]]
-            group2_data = group_means[group_names[1]]
 
-            # Calculate effect size (Cohen's d) and p-value (t-test)
-            effect_size = cohens_d(group1_data, group2_data)
-            p_value = independent_t_test(group1_data, group2_data)
+            if len(group_means) == 2:
+                # Two groups: use parametric or non-parametric test
+                group1_data = group_means[group_names[0]]
+                group2_data = group_means[group_names[1]]
 
-            # Add text box with effect size and p-value using Greek letters
-            textstr = f"δ = {effect_size:.4f}\nα = {p_value:.4f}"
+                if test_method == 'nonparametric':
+                    # Non-parametric: Mann-Whitney U test and rank-biserial correlation
+                    u_stat, p_value, n1, n2 = mann_whitney_u_test(group1_data, group2_data)
+                    effect_size = rank_biserial_correlation(u_stat, n1, n2)
+
+                    # Prepare group statistics for console output
+                    group_stats = {}
+                    for name in group_names:
+                        info = group_info[name]
+                        group_stats[name] = {
+                            'n': len(info['data']),
+                            'mean': info['mean'],
+                            'sd': info['std']
+                        }
+
+                    # Prepare test statistics for console output
+                    test_stats = {
+                        'U': u_stat,
+                        'p': p_value,
+                        'r': effect_size
+                    }
+
+                    # Print comprehensive report to console
+                    _print_statistical_report('mann-whitney', column, group_stats, test_stats)
+
+                    # Add text box with rank-biserial correlation (r) and p-value
+                    textstr = f"r = {effect_size:.3f}\n{_format_p_value(p_value)}"
+                else:
+                    # Parametric: t-test and Cohen's d
+                    effect_size = cohens_d(group1_data, group2_data)
+                    t_stat, p_value, df = independent_t_test(group1_data, group2_data)
+
+                    # Prepare group statistics for console output
+                    group_stats = {}
+                    for name in group_names:
+                        info = group_info[name]
+                        group_stats[name] = {
+                            'n': len(info['data']),
+                            'mean': info['mean'],
+                            'sd': info['std']
+                        }
+
+                    # Prepare test statistics for console output
+                    test_stats = {
+                        't': t_stat,
+                        'p': p_value,
+                        'df': df,
+                        'd': effect_size
+                    }
+
+                    # Print comprehensive report to console
+                    _print_statistical_report('t-test', column, group_stats, test_stats)
+
+                    # Add text box with Cohen's d (δ) and p-value
+                    textstr = f"δ = {effect_size:.3f}\n{_format_p_value(p_value)}"
+            else:
+                # Three or more groups: use parametric or non-parametric test
+                all_group_data = [group_means[name] for name in group_names]
+
+                if test_method == 'nonparametric':
+                    # Non-parametric: Kruskal-Wallis H test
+                    h_stat, p_value, df = kruskal_wallis_test(*all_group_data)
+
+                    # Prepare group statistics for console output
+                    group_stats = {}
+                    for name in group_names:
+                        info = group_info[name]
+                        group_stats[name] = {
+                            'n': len(info['data']),
+                            'mean': info['mean'],
+                            'sd': info['std']
+                        }
+
+                    # Prepare test statistics for console output
+                    test_stats = {
+                        'H': h_stat,
+                        'p': p_value,
+                        'df': df
+                    }
+
+                    # Print comprehensive report to console
+                    _print_statistical_report('kruskal-wallis', column, group_stats, test_stats)
+
+                    # Add text box with H-statistic and p-value
+                    textstr = f"H = {h_stat:.3f}\n{_format_p_value(p_value)}"
+                else:
+                    # Parametric: ANOVA and F-statistic
+                    f_stat, p_value, df1, df2 = one_way_anova(*all_group_data)
+
+                    # Prepare group statistics for console output
+                    group_stats = {}
+                    for name in group_names:
+                        info = group_info[name]
+                        group_stats[name] = {
+                            'n': len(info['data']),
+                            'mean': info['mean'],
+                            'sd': info['std']
+                        }
+
+                    # Prepare test statistics for console output
+                    test_stats = {
+                        'F': f_stat,
+                        'p': p_value,
+                        'df1': df1,
+                        'df2': df2
+                    }
+
+                    # Print comprehensive report to console
+                    _print_statistical_report('anova', column, group_stats, test_stats)
+
+                    # Add text box with F-statistic and p-value
+                    textstr = f"F = {f_stat:.3f}\n{_format_p_value(p_value)}"
+
+            # Display statistics in text box at top-right
             props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
             ax.text(0.98, 0.98, textstr, transform=ax.transAxes,
                    fontsize=STYLE_CONFIG['font_size'], verticalalignment='top',
-                   horizontalalignment='right', bbox=props)
+                   horizontalalignment='right', multialignment='left', bbox=props)
     else:
         # Single distribution (no grouping)
         plot_data = data[column].dropna()
@@ -389,7 +811,9 @@ def plot_categorical_bar(data: pd.DataFrame,
                         show_absolute: bool = True,
                         show_stats: bool = True,
                         trunc: int = 20,
-                        title_pad: Optional[int] = None) -> plt.Axes:
+                        title_pad: Optional[int] = None,
+                        x_label: Optional[str] = None,
+                        test_method: str = 'parametric') -> plt.Axes:
     """
     Plot bar chart for categorical variables with readable labels.
 
@@ -402,9 +826,13 @@ def plot_categorical_bar(data: pd.DataFrame,
         show_bars: Whether to show bars (default: True)
         show_percentages: Whether to show percentages on bars
         show_absolute: Whether to show absolute counts on bars
-        show_stats: Whether to show Cramér's V (effect size) and p-value when comparing groups (default: True)
+        show_stats: Whether to show effect size and p-value when comparing groups (default: True)
         trunc: Max characters for labels before truncation. -1 = no truncation (default: 20)
         title_pad: Padding between title and plot (uses STYLE_CONFIG default if None)
+        test_method: Statistical test method ('parametric' or 'nonparametric').
+                    - 'parametric': Uses chi-square test with Cramér's V (works for any table size)
+                    - 'nonparametric': Uses Fisher's exact test with odds ratio (requires 2×2 table)
+                    Default: 'parametric'
 
     Returns:
         The matplotlib axes object
@@ -414,6 +842,7 @@ def plot_categorical_bar(data: pd.DataFrame,
         >>> plot_categorical_bar(data, 'education', trunc=20)
         >>> plot_categorical_bar(data, 'gender', group_by='stimulus_group', show_stats=False)
         >>> plot_categorical_bar(data, 'gender', show_bars=False)
+        >>> plot_categorical_bar(data, 'gender', group_by='stimulus_group', test_method='nonparametric')
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -467,18 +896,68 @@ def plot_categorical_bar(data: pd.DataFrame,
 
         # Calculate and display statistics if requested and we have exactly 2 groups
         if show_stats and len(group_labels) == 2:
-            # Calculate Cramér's V (effect size) and p-value (chi-square test)
-            effect_size = cramers_v(counts)
-            p_value = chi_square_test(counts)
+            # Prepare group statistics for console output (sample sizes)
+            group_stats = {}
+            for group_label in group_labels:
+                # Sum counts for this group across all categories
+                n = counts[group_label].sum()
+                group_stats[group_label] = {'n': int(n)}
 
-            # Add text box with effect size and p-value
-            # V for Cramér's V (using 'V' instead of Greek letter for clarity)
-            # α for p-value (alpha)
-            textstr = f"V = {effect_size:.4f}\nα = {p_value:.4f}"
+            if test_method == 'nonparametric':
+                # Non-parametric: Fisher's exact test (requires 2×2 table)
+                if counts.shape != (2, 2):
+                    # Fall back to chi-square if not 2×2
+                    print(f"Warning: Fisher's exact test requires a 2×2 table. "
+                          f"Got {counts.shape}. Falling back to chi-square test.")
+                    effect_size = cramers_v(counts)
+                    chi2, p_value, df = chi_square_test(counts)
+                    test_stats = {
+                        'chi2': chi2,
+                        'p': p_value,
+                        'df': df,
+                        'V': effect_size
+                    }
+                    _print_statistical_report('chi-square', column, group_stats, test_stats)
+                    textstr = f"V = {effect_size:.3f}\n{_format_p_value(p_value)}"
+                else:
+                    # Use Fisher's exact test for 2×2 table
+                    odds_ratio, p_value = fisher_exact_test(counts)
+
+                    # Prepare test statistics for console output
+                    test_stats = {
+                        'OR': odds_ratio,
+                        'p': p_value
+                    }
+
+                    # Print comprehensive report to console
+                    _print_statistical_report('fisher', column, group_stats, test_stats)
+
+                    # Add text box with odds ratio and p-value
+                    textstr = f"OR = {odds_ratio:.3f}\n{_format_p_value(p_value)}"
+            else:
+                # Parametric: Chi-square test and Cramér's V
+                effect_size = cramers_v(counts)
+                chi2, p_value, df = chi_square_test(counts)
+
+                # Prepare test statistics for console output
+                test_stats = {
+                    'chi2': chi2,
+                    'p': p_value,
+                    'df': df,
+                    'V': effect_size
+                }
+
+                # Print comprehensive report to console
+                _print_statistical_report('chi-square', column, group_stats, test_stats)
+
+                # Add text box with Cramér's V and p-value
+                textstr = f"V = {effect_size:.3f}\n{_format_p_value(p_value)}"
+
+            # Display statistics box
             props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
             ax.text(0.98, 0.98, textstr, transform=ax.transAxes,
                    fontsize=STYLE_CONFIG['font_size'], verticalalignment='top',
-                   horizontalalignment='right', bbox=props)
+                   horizontalalignment='right', multialignment='left', bbox=props)
     else:
         # Single bar chart (no grouping)
         counts = data[column].value_counts().sort_index()
@@ -502,7 +981,7 @@ def plot_categorical_bar(data: pd.DataFrame,
                        ha='center', va='bottom', fontsize=STYLE_CONFIG['tick_size'])
 
     # Apply styling
-    apply_consistent_style(ax, title=title, xlabel=column.capitalize(),
+    apply_consistent_style(ax, title=title, xlabel=(x_label if x_label is not None else column.capitalize()),
                           ylabel='Count', title_pad=title_pad)
 
     if group_by is not None:
@@ -523,7 +1002,8 @@ def plot_continuous_distribution(data: pd.DataFrame,
                                  show_kde: bool = False,
                                  show_correlation: bool = True,
                                  bins: int = 30,
-                                 title_pad: Optional[int] = None) -> plt.Axes:
+                                 title_pad: Optional[int] = None,
+                                 test_method: str = 'parametric') -> plt.Axes:
     """
     Plot distribution of continuous variables (age, time, etc.).
 
@@ -537,9 +1017,13 @@ def plot_continuous_distribution(data: pd.DataFrame,
         ax: Optional matplotlib axes (creates new figure if None)
         show_stats: Whether to show mean and SD in legend
         show_kde: Whether to show KDE (kernel density estimate) overlay (default: False)
-        show_correlation: Whether to show Cohen's d (δ) and p-value (α) from t-test between groups (default: True)
+        show_correlation: Whether to show effect size and p-value from statistical test between groups (default: True)
         bins: Number of histogram bins
         title_pad: Padding between title and plot (uses STYLE_CONFIG default if None)
+        test_method: Statistical test method ('parametric' or 'nonparametric').
+                    - 'parametric': Uses t-test (2 groups) or ANOVA (3+ groups) with Cohen's d or η²
+                    - 'nonparametric': Uses Mann-Whitney U (2 groups) or Kruskal-Wallis (3+ groups) with rank-biserial r
+                    Default: 'parametric'
 
     Returns:
         The matplotlib axes object
@@ -548,6 +1032,7 @@ def plot_continuous_distribution(data: pd.DataFrame,
         >>> plot_continuous_distribution(data, 'age', group_by='stimulus_group', show_kde=True)
         >>> plot_continuous_distribution(data, 'page_submit', group_by='stimulus_group', show_correlation=True)
         >>> plot_continuous_distribution(data, 'page_submit', group_by='stimulus_group', show_correlation=False)
+        >>> plot_continuous_distribution(data, 'age', group_by='stimulus_group', test_method='nonparametric')
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 5))
@@ -667,22 +1152,133 @@ def plot_continuous_distribution(data: pd.DataFrame,
                        bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor=color, alpha=0.8))
 
         # Calculate and display effect size between groups if requested
-        if show_correlation and len(group_means) == 2:
-            # Get the two groups
+        if show_correlation and len(group_means) >= 2:
+            # Get all groups
             group_names = list(group_means.keys())
-            group1_data = group_means[group_names[0]]
-            group2_data = group_means[group_names[1]]
 
-            # Calculate effect size (Cohen's d) and p-value (t-test)
-            effect_size = cohens_d(group1_data, group2_data)
-            p_value = independent_t_test(group1_data, group2_data)
+            if len(group_means) == 2:
+                # Two groups: use parametric or non-parametric test
+                group1_data = group_means[group_names[0]]
+                group2_data = group_means[group_names[1]]
 
-            # Add text box with effect size and p-value using Greek letters
-            textstr = f"δ = {effect_size:.4f}\nα = {p_value:.4f}"
+                if test_method == 'nonparametric':
+                    # Non-parametric: Mann-Whitney U test and rank-biserial correlation
+                    u_stat, p_value, n1, n2 = mann_whitney_u_test(group1_data, group2_data)
+                    effect_size = rank_biserial_correlation(u_stat, n1, n2)
+
+                    # Prepare group statistics for console output
+                    group_stats = {}
+                    for name in group_names:
+                        info = group_info[name]
+                        group_stats[name] = {
+                            'n': len(info['data']),
+                            'mean': info['mean'],
+                            'sd': info['std']
+                        }
+
+                    # Prepare test statistics for console output
+                    test_stats = {
+                        'U': u_stat,
+                        'p': p_value,
+                        'r': effect_size
+                    }
+
+                    # Print comprehensive report to console
+                    _print_statistical_report('mann-whitney', column, group_stats, test_stats)
+
+                    # Add text box with rank-biserial correlation (r) and p-value
+                    textstr = f"r = {effect_size:.3f}\n{_format_p_value(p_value)}"
+                else:
+                    # Parametric: t-test and Cohen's d
+                    effect_size = cohens_d(group1_data, group2_data)
+                    t_stat, p_value, df = independent_t_test(group1_data, group2_data)
+
+                    # Prepare group statistics for console output
+                    group_stats = {}
+                    for name in group_names:
+                        info = group_info[name]
+                        group_stats[name] = {
+                            'n': len(info['data']),
+                            'mean': info['mean'],
+                            'sd': info['std']
+                        }
+
+                    # Prepare test statistics for console output
+                    test_stats = {
+                        't': t_stat,
+                        'p': p_value,
+                        'df': df,
+                        'd': effect_size
+                    }
+
+                    # Print comprehensive report to console
+                    _print_statistical_report('t-test', column, group_stats, test_stats)
+
+                    # Add text box with Cohen's d (δ) and p-value
+                    textstr = f"δ = {effect_size:.3f}\n{_format_p_value(p_value)}"
+            else:
+                # Three or more groups: use parametric or non-parametric test
+                all_group_data = [group_means[name] for name in group_names]
+
+                if test_method == 'nonparametric':
+                    # Non-parametric: Kruskal-Wallis H test
+                    h_stat, p_value, df = kruskal_wallis_test(*all_group_data)
+
+                    # Prepare group statistics for console output
+                    group_stats = {}
+                    for name in group_names:
+                        info = group_info[name]
+                        group_stats[name] = {
+                            'n': len(info['data']),
+                            'mean': info['mean'],
+                            'sd': info['std']
+                        }
+
+                    # Prepare test statistics for console output
+                    test_stats = {
+                        'H': h_stat,
+                        'p': p_value,
+                        'df': df
+                    }
+
+                    # Print comprehensive report to console
+                    _print_statistical_report('kruskal-wallis', column, group_stats, test_stats)
+
+                    # Add text box with H-statistic and p-value
+                    textstr = f"H = {h_stat:.3f}\n{_format_p_value(p_value)}"
+                else:
+                    # Parametric: ANOVA and F-statistic
+                    f_stat, p_value, df1, df2 = one_way_anova(*all_group_data)
+
+                    # Prepare group statistics for console output
+                    group_stats = {}
+                    for name in group_names:
+                        info = group_info[name]
+                        group_stats[name] = {
+                            'n': len(info['data']),
+                            'mean': info['mean'],
+                            'sd': info['std']
+                        }
+
+                    # Prepare test statistics for console output
+                    test_stats = {
+                        'F': f_stat,
+                        'p': p_value,
+                        'df1': df1,
+                        'df2': df2
+                    }
+
+                    # Print comprehensive report to console
+                    _print_statistical_report('anova', column, group_stats, test_stats)
+
+                    # Add text box with F-statistic and p-value
+                    textstr = f"F = {f_stat:.3f}\n{_format_p_value(p_value)}"
+
+            # Display statistics in text box at top-right
             props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
             ax.text(0.98, 0.98, textstr, transform=ax.transAxes,
                    fontsize=STYLE_CONFIG['font_size'], verticalalignment='top',
-                   horizontalalignment='right', bbox=props)
+                   horizontalalignment='right', multialignment='left', bbox=props)
     else:
         # Single distribution (no grouping)
         plot_data = data[column].dropna()
@@ -740,7 +1336,8 @@ def plot_boxplot(data: pd.DataFrame,
                  title_pad: Optional[int] = None,
                  mirror_hist: bool = False,
                  bins: Optional[int] = None,
-                 show_mean: bool = False) -> plt.Axes:
+                 show_mean: bool = False,
+                 test_method: str = 'parametric') -> plt.Axes:
     """
     Plot boxplots or mirrored histograms for multiple items, optionally comparing experimental groups.
 
@@ -753,13 +1350,17 @@ def plot_boxplot(data: pd.DataFrame,
         title: Plot title (auto-generated if None)
         group_by: Optional column to group by (e.g., 'stimulus_group')
         ax: Optional matplotlib axes (creates new figure if None)
-        show_stats: Whether to show Cohen's d and p-value when comparing groups
+        show_stats: Whether to show effect size and p-value when comparing groups
         use_full_labels: If True, use full labels from labels.csv; if False, use short_labels or column names
         short_labels: Optional list of short labels for x-axis (must match length of columns)
         title_pad: Padding between title and plot (auto-increased when showing stats to prevent overlap)
         mirror_hist: If True, plot mirrored histograms instead of boxplots (ideal for Likert data) (default: False)
         bins: Number of bins for mirrored histograms (auto-detected from data if None) (default: None)
         show_mean: If True, mark the mean on mirrored histograms with a diamond marker (default: False)
+        test_method: Statistical test method ('parametric' or 'nonparametric').
+                    - 'parametric': Uses t-test (2 groups) or ANOVA (3+ groups) with Cohen's d or η²
+                    - 'nonparametric': Uses Mann-Whitney U (2 groups) or Kruskal-Wallis (3+ groups) with rank-biserial r
+                    Default: 'parametric'
 
     Returns:
         The matplotlib axes object
@@ -834,6 +1435,18 @@ def plot_boxplot(data: pd.DataFrame,
         n_groups = len(groups)
         n_items = len(columns)
 
+        # Get readable labels for all groups first
+        group_labels = []
+        for group in groups:
+            try:
+                group_labels.append(get_label_for_value(group_by, group))
+            except (ValueError, KeyError):
+                group_labels.append(str(group))
+
+        # Get colors for all groups dynamically
+        group_colors = get_group_colors(group_labels)
+        color_map = dict(zip(groups, group_colors))
+
         # Calculate positions for boxes
         # Each item gets a cluster of boxes (one per group)
         width = 0.35  # Width of each box
@@ -883,14 +1496,9 @@ def plot_boxplot(data: pd.DataFrame,
 
         # Plot boxes/histograms for each group
         for group_idx, group in enumerate(groups):
-            # Get readable label for group
-            try:
-                group_label = get_label_for_value(group_by, group)
-            except (ValueError, KeyError):
-                group_label = str(group)
-
-            # Choose color
-            color = COLORS.get(group_label.lower(), COLORS['primary'])
+            # Get readable label and color for this group
+            group_label = group_labels[group_idx]
+            color = color_map[group]
 
             # Collect data for this group across all items
             group_data = []
@@ -950,41 +1558,166 @@ def plot_boxplot(data: pd.DataFrame,
                 # Add to legend (just once per group)
                 bp['boxes'][0].set_label(group_label)
 
-        # Calculate effect sizes and p-values if comparing two groups
-        if show_stats and n_groups == 2:
-            group_labels = []
-            for group in groups:
-                try:
-                    group_labels.append(get_label_for_value(group_by, group))
-                except (ValueError, KeyError):
-                    group_labels.append(str(group))
+                # Add mean markers if requested
+                if show_mean:
+                    ax.scatter(group_positions[group], group_means,
+                             marker='D', color='white', s=50,
+                             edgecolors=color, linewidths=2,
+                             zorder=3)
+
+        # Calculate effect sizes and p-values if comparing groups
+        if show_stats and n_groups >= 2:
+            # Print header for multiple item comparison
+            print(f"\n{'='*60}")
+            print(f"Multiple Item Comparison: {', '.join(columns)}")
+            print(f"{'='*60}")
 
             for col_idx, col in enumerate(columns):
-                group1_data = data[data[group_by] == groups[0]][col].dropna()
-                group2_data = data[data[group_by] == groups[1]][col].dropna()
+                # Collect data for all groups for this column
+                all_group_data = [data[data[group_by] == group][col].dropna() for group in groups]
 
-                d = cohens_d(group1_data, group2_data)
-                p = independent_t_test(group1_data, group2_data)
-
-                effect_sizes.append(d)
-                p_values.append(p)
-
-                # Add text annotation above boxes
-                # Find the max value in this item's data for positioning
-                max_val = max(group1_data.max(), group2_data.max())
+                # Find max value across all groups for positioning
+                max_val = max(gdata.max() for gdata in all_group_data if len(gdata) > 0)
 
                 # Position text above the item cluster
                 text_x = col_idx * (n_groups * width + 0.5)
                 text_y = max_val * 1.05  # 5% above max value
 
-                # Format text
-                text_str = f"δ={d:.3f}\nα={p:.3f}"
+                if n_groups == 2:
+                    # Two groups: use parametric or non-parametric test
+                    group1_data = all_group_data[0]
+                    group2_data = all_group_data[1]
+
+                    if test_method == 'nonparametric':
+                        # Non-parametric: Mann-Whitney U test and rank-biserial correlation
+                        u_stat, p, n1, n2 = mann_whitney_u_test(group1_data, group2_data)
+                        effect_size = rank_biserial_correlation(u_stat, n1, n2)
+
+                        effect_sizes.append(effect_size)
+                        p_values.append(p)
+
+                        # Prepare group statistics for console output
+                        group_stats = {}
+                        for i, group_label in enumerate(group_labels):
+                            group_stats[group_label] = {
+                                'n': len(all_group_data[i]),
+                                'mean': all_group_data[i].mean(),
+                                'sd': all_group_data[i].std()
+                            }
+
+                        # Prepare test statistics for console output
+                        test_stats = {
+                            'U': u_stat,
+                            'p': p,
+                            'r': effect_size
+                        }
+
+                        # Print comprehensive report to console
+                        _print_statistical_report('mann-whitney', col, group_stats, test_stats)
+
+                        # Format text with rank-biserial correlation (r) and p-value
+                        text_str = f"r = {effect_size:.3f}\n{_format_p_value(p)}"
+                    else:
+                        # Parametric: t-test and Cohen's d
+                        d = cohens_d(group1_data, group2_data)
+                        t_stat, p, df = independent_t_test(group1_data, group2_data)
+
+                        effect_sizes.append(d)
+                        p_values.append(p)
+
+                        # Prepare group statistics for console output
+                        group_stats = {}
+                        for i, group_label in enumerate(group_labels):
+                            group_stats[group_label] = {
+                                'n': len(all_group_data[i]),
+                                'mean': all_group_data[i].mean(),
+                                'sd': all_group_data[i].std()
+                            }
+
+                        # Prepare test statistics for console output
+                        test_stats = {
+                            't': t_stat,
+                            'p': p,
+                            'df': df,
+                            'd': d
+                        }
+
+                        # Print comprehensive report to console
+                        _print_statistical_report('t-test', col, group_stats, test_stats)
+
+                        # Format text with Cohen's d (δ) and p-value
+                        text_str = f"δ = {d:.3f}\n{_format_p_value(p)}"
+                else:
+                    # Three or more groups: use parametric or non-parametric test
+                    if test_method == 'nonparametric':
+                        # Non-parametric: Kruskal-Wallis H test
+                        h_stat, p, df = kruskal_wallis_test(*all_group_data)
+
+                        effect_sizes.append(h_stat)  # Store H-statistic
+                        p_values.append(p)
+
+                        # Prepare group statistics for console output
+                        group_stats = {}
+                        for i, group_label in enumerate(group_labels):
+                            group_stats[group_label] = {
+                                'n': len(all_group_data[i]),
+                                'mean': all_group_data[i].mean(),
+                                'sd': all_group_data[i].std()
+                            }
+
+                        # Prepare test statistics for console output
+                        test_stats = {
+                            'H': h_stat,
+                            'p': p,
+                            'df': df
+                        }
+
+                        # Print comprehensive report to console
+                        _print_statistical_report('kruskal-wallis', col, group_stats, test_stats)
+
+                        # Format text with H-statistic and p-value
+                        text_str = f"H = {h_stat:.3f}\n{_format_p_value(p)}"
+                    else:
+                        # Parametric: ANOVA and F-statistic
+                        f_stat, p, df1, df2 = one_way_anova(*all_group_data)
+
+                        effect_sizes.append(f_stat)  # Store F-statistic
+                        p_values.append(p)
+
+                        # Prepare group statistics for console output
+                        group_stats = {}
+                        for i, group_label in enumerate(group_labels):
+                            group_stats[group_label] = {
+                                'n': len(all_group_data[i]),
+                                'mean': all_group_data[i].mean(),
+                                'sd': all_group_data[i].std()
+                            }
+
+                        # Prepare test statistics for console output
+                        test_stats = {
+                            'F': f_stat,
+                            'p': p,
+                            'df1': df1,
+                            'df2': df2
+                        }
+
+                        # Print comprehensive report to console
+                        _print_statistical_report('anova', col, group_stats, test_stats)
+
+                        # Format text with F-statistic and p-value
+                        text_str = f"F = {f_stat:.3f}\n{_format_p_value(p)}"
+
+                # Add text annotation above boxes
                 ax.text(text_x, text_y, text_str,
                        ha='center', va='bottom',
                        fontsize=STYLE_CONFIG['tick_size'] - 1,
+                       multialignment='left',
                        bbox=dict(boxstyle='round,pad=0.3',
                                facecolor='wheat', alpha=0.3,
                                edgecolor='none'))
+
+            # Print footer
+            print(f"{'='*60}\n")
 
         # Set x-tick positions at center of each item cluster
         tick_positions = [i * (n_groups * width + 0.5) for i in range(n_items)]
@@ -1096,7 +1829,8 @@ def plot_split_histogram_boxplot(data: pd.DataFrame,
                                   show_stats: bool = True,
                                   show_counts: bool = False,
                                   hist_scale: float = 0.4,
-                                  title_pad: Optional[int] = None) -> plt.Axes:
+                                  title_pad: Optional[int] = None,
+                                  test_method: str = 'parametric') -> plt.Axes:
     """
     Plot split histogram with central boxplot for comparing two groups on a single scale.
 
@@ -1117,10 +1851,14 @@ def plot_split_histogram_boxplot(data: pd.DataFrame,
         ax: Optional matplotlib axes (creates new figure if None)
         bins: Number of histogram bins (auto-detected from unique values if None)
         show_mean: If True, mark the mean on boxplots with a diamond marker (default: True)
-        show_stats: Whether to show Cohen's d and p-value (default: True)
+        show_stats: Whether to show effect size and p-value (default: True)
         show_counts: If True, show "N (X%)" format; if False, show "X%" only (default: False)
         hist_scale: Maximum histogram width as proportion of plot (default: 0.4)
         title_pad: Padding between title and plot (uses STYLE_CONFIG default if None)
+        test_method: Statistical test method ('parametric' or 'nonparametric').
+                    - 'parametric': Uses t-test with Cohen's d
+                    - 'nonparametric': Uses Mann-Whitney U with rank-biserial correlation r
+                    Default: 'parametric'
 
     Returns:
         The matplotlib axes object
@@ -1336,16 +2074,61 @@ def plot_split_histogram_boxplot(data: pd.DataFrame,
     # Add statistical annotations if requested
     box_shift = normalized_counts2[-1] *0.6 + 0.1  # amount by which the statistics box is shifted to the left
     if show_stats:
-        # Calculate effect size (Cohen's d) and p-value (t-test)
-        effect_size = cohens_d(group1_data, group2_data)
-        p_value = independent_t_test(group1_data, group2_data)
+        # Prepare group statistics for console output (used by both parametric and non-parametric)
+        group_stats = {
+            group1_label: {
+                'n': len(group1_data),
+                'mean': group1_data.mean(),
+                'sd': group1_data.std()
+            },
+            group2_label: {
+                'n': len(group2_data),
+                'mean': group2_data.mean(),
+                'sd': group2_data.std()
+            }
+        }
 
-        # Add text box with effect size and p-value
-        textstr = f"δ = {effect_size:.4f}\nα = {p_value:.4f}"
+        if test_method == 'nonparametric':
+            # Non-parametric: Mann-Whitney U test and rank-biserial correlation
+            u_stat, p_value, n1, n2 = mann_whitney_u_test(group1_data, group2_data)
+            effect_size = rank_biserial_correlation(u_stat, n1, n2)
+
+            # Prepare test statistics for console output
+            test_stats = {
+                'U': u_stat,
+                'p': p_value,
+                'r': effect_size
+            }
+
+            # Print comprehensive report to console
+            _print_statistical_report('mann-whitney', column, group_stats, test_stats)
+
+            # Add text box with rank-biserial correlation (r) and p-value
+            textstr = f"r = {effect_size:.3f}\n{_format_p_value(p_value)}"
+        else:
+            # Parametric: t-test and Cohen's d
+            effect_size = cohens_d(group1_data, group2_data)
+            t_stat, p_value, df = independent_t_test(group1_data, group2_data)
+
+            # Prepare test statistics for console output
+            test_stats = {
+                't': t_stat,
+                'p': p_value,
+                'df': df,
+                'd': effect_size
+            }
+
+            # Print comprehensive report to console
+            _print_statistical_report('t-test', column, group_stats, test_stats)
+
+            # Add text box with Cohen's d (δ) and p-value
+            textstr = f"δ = {effect_size:.3f}\n{_format_p_value(p_value)}"
+
+        # Display statistics box
         props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
         ax.text(1-box_shift, 0.96, textstr, transform=ax.transAxes,
                fontsize=STYLE_CONFIG['font_size'], verticalalignment='top',
-               horizontalalignment='right', bbox=props)
+               horizontalalignment='right', multialignment='left', bbox=props)
 
     # Set axis limits (tight to histogram edges with small margin)
     margin = 0.05
@@ -1455,6 +2238,256 @@ def set_custom_colors(color_dict: dict) -> None:
     """
     global COLORS
     COLORS.update(color_dict)
+
+
+def plot_scatterplot(data: pd.DataFrame,
+                    x_column: str,
+                    y_column: str,
+                    title: Optional[str] = None,
+                    group_by: Optional[str] = None,
+                    ax: Optional[plt.Axes] = None,
+                    show_stats: bool = True,
+                    show_regression: bool = True,
+                    correlation_method: str = 'pearson',
+                    point_size: int = 50,
+                    point_alpha: float = 0.6,
+                    title_pad: Optional[int] = None) -> plt.Axes:
+    """
+    Plot scatterplot with correlation analysis for examining relationships between two variables.
+
+    Shows scatter points with optional regression lines. Calculates Pearson's r or Spearman's ρ
+    correlation. Optionally groups data by experimental condition to examine group-specific correlations.
+
+    Args:
+        data: DataFrame containing the data
+        x_column: Column name for x-axis variable
+        y_column: Column name for y-axis variable
+        title: Plot title (auto-generated if None)
+        group_by: Optional column to group by (e.g., 'stimulus_group')
+        ax: Optional matplotlib axes (creates new figure if None)
+        show_stats: Whether to show correlation statistics (default: True)
+        show_regression: Whether to show regression line(s) (default: True)
+        correlation_method: 'pearson' for linear correlation or 'spearman' for rank correlation (default: 'pearson')
+        point_size: Size of scatter points (default: 50)
+        point_alpha: Transparency of points, 0-1 (default: 0.6, helps show density)
+        title_pad: Padding between title and plot (uses STYLE_CONFIG default if None)
+
+    Returns:
+        The matplotlib axes object
+
+    Example:
+        >>> # Basic scatterplot with Pearson correlation
+        >>> plot_scatterplot(data, 'age', 'ati')
+
+        >>> # Grouped by stimulus group with Spearman correlation
+        >>> plot_scatterplot(data, 'TiA_rc', 'TiA_up',
+        ...                  group_by='stimulus_group',
+        ...                  correlation_method='spearman')
+
+        >>> # Without regression lines, larger points
+        >>> plot_scatterplot(data, 'age', 'page_submit',
+        ...                  show_regression=False,
+        ...                  point_size=80)
+
+        >>> # Multiple scatterplots in a grid
+        >>> fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        >>> plot_scatterplot(data, 'age', 'ati', ax=axes[0, 0])
+        >>> plot_scatterplot(data, 'ati', 'TiA_t', ax=axes[0, 1])
+        >>> plot_scatterplot(data, 'TiA_rc', 'TiA_up', ax=axes[1, 0])
+        >>> plot_scatterplot(data, 'TiA_f', 'TiA_pro', ax=axes[1, 1])
+        >>> plt.tight_layout()
+    """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Generate title if not provided
+    if title is None:
+        title = f"Correlation: {x_column.upper()} vs {y_column.upper()}"
+
+    # Validate correlation method
+    if correlation_method not in ['pearson', 'spearman']:
+        raise ValueError("correlation_method must be 'pearson' or 'spearman'")
+
+    # Check if grouping is requested
+    if group_by is not None and group_by in data.columns:
+        # Grouped scatterplot
+        groups = sorted(data[group_by].unique())
+
+        # Get readable labels for all groups first
+        group_labels = []
+        for group in groups:
+            try:
+                group_labels.append(get_label_for_value(group_by, group))
+            except (ValueError, KeyError):
+                group_labels.append(str(group))
+
+        # Get colors for all groups dynamically
+        group_colors = get_group_colors(group_labels)
+        color_map = dict(zip(groups, group_colors))
+
+        # Plot scatter for each group
+        for group_idx, group in enumerate(groups):
+            group_label = group_labels[group_idx]
+            color = color_map[group]
+
+            # Filter data for this group
+            group_mask = data[group_by] == group
+            x_data = data[group_mask][x_column].dropna()
+            y_data = data[group_mask][y_column].dropna()
+
+            # Align x and y data (remove NaN from either variable)
+            combined = pd.concat([x_data, y_data], axis=1).dropna()
+            x_clean = combined.iloc[:, 0]
+            y_clean = combined.iloc[:, 1]
+
+            # Plot scatter points
+            ax.scatter(x_clean, y_clean,
+                      color=color, alpha=point_alpha, s=point_size,
+                      label=group_label, edgecolors='black', linewidth=0.5)
+
+            # Plot regression line if requested
+            if show_regression and len(x_clean) > 1:
+                # Calculate linear regression
+                coefficients = np.polyfit(x_clean, y_clean, 1)
+                poly_func = np.poly1d(coefficients)
+
+                # Create smooth line
+                x_line = np.linspace(x_clean.min(), x_clean.max(), 100)
+                y_line = poly_func(x_line)
+
+                # Plot regression line (slightly thicker, semi-transparent)
+                ax.plot(x_line, y_line, color=color, alpha=0.8,
+                       linewidth=2, linestyle='--')
+
+        # Calculate and display per-group correlations if requested
+        if show_stats:
+            # Prepare text for all groups
+            text_lines = []
+            for group_idx, group in enumerate(groups):
+                group_label = group_labels[group_idx]
+
+                # Filter and align data for this group
+                group_mask = data[group_by] == group
+                x_data = data[group_mask][x_column]
+                y_data = data[group_mask][y_column]
+
+                # Calculate correlation
+                if correlation_method == 'pearson':
+                    corr_coef, p_value = pearson_correlation(x_data, y_data)
+                    # Prepare stats for console output
+                    corr_stats = {
+                        'r': corr_coef,
+                        'p': p_value,
+                        'n': len(pd.concat([x_data, y_data], axis=1).dropna())
+                    }
+                else:  # spearman
+                    corr_coef, p_value = spearman_correlation(x_data, y_data)
+                    # Prepare stats for console output
+                    corr_stats = {
+                        'rho': corr_coef,
+                        'p': p_value,
+                        'n': len(pd.concat([x_data, y_data], axis=1).dropna())
+                    }
+
+                # Print to console
+                _print_correlation_report(x_column, y_column, correlation_method,
+                                        corr_stats, group_name=group_label)
+
+                # Add to text box
+                symbol = 'r' if correlation_method == 'pearson' else 'ρ'
+                text_lines.append(f"{group_label}: {symbol} = {corr_coef:.3f}, {_format_p_value(p_value)}")
+
+            # Display all correlations in a single text box at top-right
+            textstr = '\n'.join(text_lines)
+            props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+            ax.text(0.98, 0.98, textstr, transform=ax.transAxes,
+                   fontsize=STYLE_CONFIG['font_size'], verticalalignment='top',
+                   horizontalalignment='right', multialignment='left', bbox=props)
+
+        # Add legend
+        ax.legend(frameon=False, fontsize=STYLE_CONFIG['font_size'], loc='best')
+
+    else:
+        # Single scatterplot (no grouping)
+        x_data = data[x_column].dropna()
+        y_data = data[y_column].dropna()
+
+        # Align x and y data
+        combined = pd.concat([x_data, y_data], axis=1).dropna()
+        x_clean = combined.iloc[:, 0]
+        y_clean = combined.iloc[:, 1]
+
+        # Plot scatter points
+        ax.scatter(x_clean, y_clean,
+                  color=COLORS['primary'], alpha=point_alpha, s=point_size,
+                  edgecolors='black', linewidth=0.5)
+
+        # Plot regression line if requested
+        if show_regression and len(x_clean) > 1:
+            # Calculate linear regression
+            coefficients = np.polyfit(x_clean, y_clean, 1)
+            poly_func = np.poly1d(coefficients)
+
+            # Create smooth line
+            x_line = np.linspace(x_clean.min(), x_clean.max(), 100)
+            y_line = poly_func(x_line)
+
+            # Plot regression line
+            ax.plot(x_line, y_line, color=COLORS['primary'], alpha=0.8,
+                   linewidth=2, linestyle='--', label='Regression line')
+
+        # Calculate and display correlation if requested
+        if show_stats:
+            # Calculate correlation
+            if correlation_method == 'pearson':
+                corr_coef, p_value = pearson_correlation(data[x_column], data[y_column])
+                symbol = 'r'
+                # Prepare stats for console output
+                corr_stats = {
+                    'r': corr_coef,
+                    'p': p_value,
+                    'n': len(combined)
+                }
+            else:  # spearman
+                corr_coef, p_value = spearman_correlation(data[x_column], data[y_column])
+                symbol = 'ρ'
+                # Prepare stats for console output
+                corr_stats = {
+                    'rho': corr_coef,
+                    'p': p_value,
+                    'n': len(combined)
+                }
+
+            # Print to console
+            _print_correlation_report(x_column, y_column, correlation_method, corr_stats)
+
+            # Display correlation in text box at top-right
+            textstr = f"{symbol} = {corr_coef:.3f}\n{_format_p_value(p_value)}\nn = {len(combined)}"
+            props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+            ax.text(0.98, 0.98, textstr, transform=ax.transAxes,
+                   fontsize=STYLE_CONFIG['font_size'], verticalalignment='top',
+                   horizontalalignment='right', multialignment='left', bbox=props)
+
+        # Add legend if regression line is shown
+        if show_regression and len(x_clean) > 1:
+            ax.legend(frameon=False, fontsize=STYLE_CONFIG['font_size'], loc='best')
+
+    # Set axis labels (try to get readable labels from metadata)
+    try:
+        xlabel = get_label_for_value('column_labels', x_column)
+    except (ValueError, KeyError):
+        xlabel = x_column.replace('_', ' ').title()
+
+    try:
+        ylabel = get_label_for_value('column_labels', y_column)
+    except (ValueError, KeyError):
+        ylabel = y_column.replace('_', ' ').title()
+
+    # Apply consistent styling
+    apply_consistent_style(ax, title=title, xlabel=xlabel,
+                          ylabel=ylabel, title_pad=title_pad)
+
+    return ax
 
 
 # ============================================================================
