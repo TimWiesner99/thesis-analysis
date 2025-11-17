@@ -643,7 +643,7 @@ def plot_likert_distribution(data: pd.DataFrame,
                     _print_statistical_report('mann-whitney', column, group_stats, test_stats)
 
                     # Add text box with rank-biserial correlation (r) and p-value
-                    textstr = f"r = {effect_size:.3f}\n{_format_p_value(p_value)}"
+                    textstr = f"r = {effect_size:.2f}\n{_format_p_value(p_value)}"
                 else:
                     # Parametric: t-test and Cohen's d
                     effect_size = cohens_d(group1_data, group2_data)
@@ -671,7 +671,7 @@ def plot_likert_distribution(data: pd.DataFrame,
                     _print_statistical_report('t-test', column, group_stats, test_stats)
 
                     # Add text box with Cohen's d (δ) and p-value
-                    textstr = f"δ = {effect_size:.3f}\n{_format_p_value(p_value)}"
+                    textstr = f"δ = {effect_size:.2f}\n{_format_p_value(p_value)}"
             else:
                 # Three or more groups: use parametric or non-parametric test
                 all_group_data = [group_means[name] for name in group_names]
@@ -701,7 +701,7 @@ def plot_likert_distribution(data: pd.DataFrame,
                     _print_statistical_report('kruskal-wallis', column, group_stats, test_stats)
 
                     # Add text box with H-statistic and p-value
-                    textstr = f"H = {h_stat:.3f}\n{_format_p_value(p_value)}"
+                    textstr = f"H = {h_stat:.2f}\n{_format_p_value(p_value)}"
                 else:
                     # Parametric: ANOVA and F-statistic
                     f_stat, p_value, df1, df2 = one_way_anova(*all_group_data)
@@ -728,7 +728,7 @@ def plot_likert_distribution(data: pd.DataFrame,
                     _print_statistical_report('anova', column, group_stats, test_stats)
 
                     # Add text box with F-statistic and p-value
-                    textstr = f"F = {f_stat:.3f}\n{_format_p_value(p_value)}"
+                    textstr = f"F = {f_stat:.2f}\n{_format_p_value(p_value)}"
 
             # Display statistics in text box at top-right
             props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
@@ -1187,7 +1187,7 @@ def plot_continuous_distribution(data: pd.DataFrame,
                     _print_statistical_report('mann-whitney', column, group_stats, test_stats)
 
                     # Add text box with rank-biserial correlation (r) and p-value
-                    textstr = f"r = {effect_size:.3f}\n{_format_p_value(p_value)}"
+                    textstr = f"r = {effect_size:.2f}\n{_format_p_value(p_value)}"
                 else:
                     # Parametric: t-test and Cohen's d
                     effect_size = cohens_d(group1_data, group2_data)
@@ -1215,7 +1215,7 @@ def plot_continuous_distribution(data: pd.DataFrame,
                     _print_statistical_report('t-test', column, group_stats, test_stats)
 
                     # Add text box with Cohen's d (δ) and p-value
-                    textstr = f"δ = {effect_size:.3f}\n{_format_p_value(p_value)}"
+                    textstr = f"δ = {effect_size:.2f}\n{_format_p_value(p_value)}"
             else:
                 # Three or more groups: use parametric or non-parametric test
                 all_group_data = [group_means[name] for name in group_names]
@@ -1245,7 +1245,7 @@ def plot_continuous_distribution(data: pd.DataFrame,
                     _print_statistical_report('kruskal-wallis', column, group_stats, test_stats)
 
                     # Add text box with H-statistic and p-value
-                    textstr = f"H = {h_stat:.3f}\n{_format_p_value(p_value)}"
+                    textstr = f"H = {h_stat:.2f}\n{_format_p_value(p_value)}"
                 else:
                     # Parametric: ANOVA and F-statistic
                     f_stat, p_value, df1, df2 = one_way_anova(*all_group_data)
@@ -1272,7 +1272,7 @@ def plot_continuous_distribution(data: pd.DataFrame,
                     _print_statistical_report('anova', column, group_stats, test_stats)
 
                     # Add text box with F-statistic and p-value
-                    textstr = f"F = {f_stat:.3f}\n{_format_p_value(p_value)}"
+                    textstr = f"F = {f_stat:.2f}\n{_format_p_value(p_value)}"
 
             # Display statistics in text box at top-right
             props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
