@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python:*)",
       "Bash(cat:*)",
-      "Bash(uv run python:*)"
+      "Bash(uv run python:*)",
+      "Bash(NUL)"
     ],
     "deny": [],
     "ask": []

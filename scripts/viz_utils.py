@@ -1001,6 +1001,7 @@ def plot_continuous_distribution(data: pd.DataFrame,
                                  group_by: Optional[str] = None,
                                  ax: Optional[plt.Axes] = None,
                                  show_stats: bool = True,
+                                 show_bars: bool = True,
                                  show_kde: bool = False,
                                  show_correlation: bool = True,
                                  bins: int = 30,
@@ -1018,6 +1019,7 @@ def plot_continuous_distribution(data: pd.DataFrame,
         group_by: Optional column to group by (e.g., 'stimulus_group')
         ax: Optional matplotlib axes (creates new figure if None)
         show_stats: Whether to show mean and SD in legend
+        show_bars: Whether to show histogram bars (default: True)
         show_kde: Whether to show KDE (kernel density estimate) overlay (default: False)
         show_correlation: Whether to show effect size and p-value from statistical test between groups (default: True)
         bins: Number of histogram bins
@@ -1035,6 +1037,7 @@ def plot_continuous_distribution(data: pd.DataFrame,
         >>> plot_continuous_distribution(data, 'page_submit', group_by='stimulus_group', show_correlation=True)
         >>> plot_continuous_distribution(data, 'page_submit', group_by='stimulus_group', show_correlation=False)
         >>> plot_continuous_distribution(data, 'age', group_by='stimulus_group', test_method='nonparametric')
+        >>> plot_continuous_distribution(data, 'age', group_by='stimulus_group', show_bars=False, show_kde=True)
     """
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 5))
@@ -1042,6 +1045,10 @@ def plot_continuous_distribution(data: pd.DataFrame,
     # Generate title if not provided
     if title is None:
         title = f"Distribution of {column.replace('_', ' ').title()}"
+
+    # Remove stats from legend if kde plot is chosen
+    if show_kde:
+        show_stats = False
 
     # Check if grouping is requested
     if group_by is not None and group_by in data.columns:
@@ -1107,13 +1114,15 @@ def plot_continuous_distribution(data: pd.DataFrame,
             data_range = data[column].max() - data[column].min()
             offset = data_range * 0.02  # 2% of data range
 
-            # Plot histogram
-            ax.hist(group_data, bins=bins, alpha=STYLE_CONFIG['hist_alpha'],
-                   label=label, color=color, edgecolor='white', linewidth=0.5)
+            # Plot histogram (optional)
+            if show_bars:
+                ax.hist(group_data, bins=bins, alpha=STYLE_CONFIG['hist_alpha'],
+                       label=label, color=color, edgecolor='white', linewidth=0.5)
 
             # Plot KDE (optional)
             if show_kde:
-                group_data.plot.kde(ax=ax, color=color, linewidth=STYLE_CONFIG['kde_linewidth'])
+                group_data.plot.kde(ax=ax, color=color, linewidth=STYLE_CONFIG['kde_linewidth'],
+                                   label=label if not show_bars else None)
 
                 # Add vertical line for mean
                 ax.axvline(mean, color=color, linestyle='--', linewidth=1.5, alpha=0.6)
@@ -1289,14 +1298,16 @@ def plot_continuous_distribution(data: pd.DataFrame,
         if show_stats:
             label += f" (M={plot_data.mean():.1f}, SD={plot_data.std():.1f})"
 
-        # Plot histogram
-        ax.hist(plot_data, bins=bins, alpha=STYLE_CONFIG['hist_alpha'],
-               label=label, color=COLORS['primary'], edgecolor='white', linewidth=0.5)
+        # Plot histogram (optional)
+        if show_bars:
+            ax.hist(plot_data, bins=bins, alpha=STYLE_CONFIG['hist_alpha'],
+                   label=label, color=COLORS['primary'], edgecolor='white', linewidth=0.5)
 
         # Plot KDE (optional)
         if show_kde:
             plot_data.plot.kde(ax=ax, color=COLORS['primary'],
-                              linewidth=STYLE_CONFIG['kde_linewidth'])
+                              linewidth=STYLE_CONFIG['kde_linewidth'],
+                              label=label if not show_bars else None)
 
             # Add vertical line for mean
             mean = plot_data.mean()
@@ -2492,34 +2503,90 @@ def plot_scatterplot(data: pd.DataFrame,
     return ax
 
 
-def plot_noninferiority_test(mean_diff: float,
-                             sesoi: float,
-                             se: float,
+def _print_noninferiority_report(variable_name: str,
+                                  mean_diff: float,
+                                  se: float,
+                                  ci_lower: float,
+                                  ci_upper: float,
+                                  sesoi_position: float,
+                                  z_score: float,
+                                  p_value: float,
+                                  alpha: float,
+                                  non_inferior: bool,
+                                  test_type: str) -> None:
+    """
+    Print non-inferiority test results to console in APA-style format.
+
+    This internal helper function formats and displays non-inferiority test results
+    in a format ready for copy-pasting into manuscripts.
+
+    Args:
+        variable_name: Name of the variable being tested
+        mean_diff: Observed mean difference
+        se: Standard error of the mean difference
+        ci_lower: Lower confidence interval bound
+        ci_upper: Upper confidence interval bound
+        sesoi_position: SESOI margin position (negative for lower test)
+        z_score: Z-score for the test
+        p_value: P-value for the test
+        alpha: Significance level
+        non_inferior: Whether non-inferiority was established
+        test_type: Type of test ('lower' or 'upper')
+    """
+    # Format p-value in APA style (no leading zero)
+    def format_p(p_value: float) -> str:
+        if p_value < 0.001:
+            return "< .001"
+        else:
+            return f"= {p_value:.3f}".replace("0.", ".")
+
+    print(f"\nNon-Inferiority Test Results for '{variable_name}':")
+    print(f"  Mean difference: M_diff = {mean_diff:.3f}, SE = {se:.3f}")
+    print(f"  {(1-alpha)*100:.0f}% CI: [{ci_lower:.3f}, {ci_upper:.3f}]")
+    print(f"  SESOI margin: {sesoi_position:.3f}")
+    print(f"  z = {z_score:.3f}, p {format_p(p_value)}")
+
+    if non_inferior:
+        print(f"  Result: Non-inferiority established (p {format_p(p_value)})")
+    else:
+        print(f"  Result: Non-inferiority not established (p {format_p(p_value)})")
+
+    print()  # Blank line separator
+
+
+def plot_noninferiority_test(mean_diff,
+                             sesoi,
+                             se,
                              alpha: float = 0.05,
                              test_type: str = 'lower',
                              title: Optional[str] = None,
                              xlabel: Optional[str] = None,
                              ax: Optional[plt.Axes] = None,
                              title_pad: Optional[int] = None,
-                             show_stats: bool = True) -> plt.Axes:
+                             show_stats: bool = True,
+                             variable_names: Optional[List[str]] = None,
+                             variable_labels: Optional[dict] = None) -> plt.Axes:
     """
-    Visualize non-inferiority test with a Gaussian distribution and SESOI margin.
+    Visualize non-inferiority test with single or multiple stacked Gaussian distributions.
 
-    Creates a visualization showing:
-    - Gaussian distribution centered at the observed mean difference
-    - SESOI (non-inferiority margin) marked with a vertical line
-    - Non-inferiority zone shaded (right of SESOI for lower test, left for upper test)
-    - Both tails highlighted (alpha/2 in each) showing the confidence interval
-    - Dotted line at zero to assess if mean difference is significantly different from zero
+    Supports two modes:
+    1. Single distribution: Scalar inputs create one distribution plot
+    2. Multiple distributions: List inputs create vertically stacked distributions with shared x-axis
+
+    For multiple distributions:
+    - Each distribution is stacked vertically with shared x-axis
+    - Variable names displayed on y-axis (inferred from variable_labels or variable_names)
+    - No legend - all information shown via direct labeling
+    - Statistics printed to console in APA format
+    - Direct labels show: mean/SE, SESOI value, CI bounds
 
     For a lower non-inferiority test, non-inferiority is established when the lower
-    confidence bound (alpha-percentile) is greater than the SESOI margin, meaning
-    we can be confident the new treatment is not worse by more than the margin.
+    confidence bound (alpha-percentile) is greater than the SESOI margin.
 
     Args:
-        mean_diff: Observed mean difference between samples (e.g., new - standard)
-        sesoi: Smallest Effect Size Of Interest (non-inferiority margin, positive value)
-        se: Standard error of the mean difference
+        mean_diff: Observed mean difference(s). Float for single, List[float] for multiple
+        sesoi: SESOI margin(s) - positive value(s). Float for single, List[float] for multiple
+        se: Standard error(s) of mean difference. Float for single, List[float] for multiple
         alpha: Significance level for the test (default: 0.05)
         test_type: Type of non-inferiority test:
                   - 'lower': Test if new is not worse (mean_diff > -sesoi)
@@ -2529,177 +2596,358 @@ def plot_noninferiority_test(mean_diff: float,
         xlabel: X-axis label (default: "Effect Size")
         ax: Optional matplotlib axes (creates new figure if None)
         title_pad: Padding between title and plot (uses STYLE_CONFIG default if None)
-        show_stats: Whether to show test statistics in text box (default: True)
+        show_stats: Whether to print test statistics to console (default: True)
+        variable_names: List of variable names for y-axis labels (required for multiple mode)
+        variable_labels: Dict mapping variable names to display labels (e.g., scale_titles)
 
     Returns:
         The matplotlib axes object
 
     Example:
-        >>> # Lower non-inferiority test (new treatment not worse than standard)
-        >>> # Observed difference: 0.15, margin: -0.3, SE: 0.12, alpha: 0.05
+        >>> # Single distribution (backward compatible)
         >>> plot_noninferiority_test(mean_diff=0.15, sesoi=0.3, se=0.12, alpha=0.05)
 
-        >>> # Upper non-inferiority test (new treatment not better than standard)
-        >>> plot_noninferiority_test(mean_diff=-0.10, sesoi=0.3, se=0.12,
-        ...                          test_type='upper')
-
-        >>> # Custom labels and no statistics
-        >>> plot_noninferiority_test(mean_diff=0.15, sesoi=0.3, se=0.12,
-        ...                          title='Non-Inferiority Analysis',
-        ...                          xlabel='Mean Difference (Cohen\'s d)',
-        ...                          show_stats=False)
+        >>> # Multiple stacked distributions
+        >>> plot_noninferiority_test(
+        ...     mean_diff=[0.15, -0.03, -0.10],
+        ...     sesoi=[0.15, 0.11, 0.09],
+        ...     se=[0.11, 0.08, 0.07],
+        ...     variable_names=['tia_f', 'tia_pro', 'tia_rc'],
+        ...     variable_labels={'tia_f': 'Familiarity', 'tia_pro': 'Propensity'},
+        ...     title='Non-Inferiority Analysis: Trust in Automation'
+        ... )
 
     Notes:
         - For 'lower' non-inferiority: H0: μ_diff ≤ -sesoi vs H1: μ_diff > -sesoi
         - For 'upper' non-inferiority: H0: μ_diff ≥ sesoi vs H1: μ_diff < sesoi
         - The SESOI (margin) should always be provided as a positive value
-        - The function automatically handles the sign based on test_type
+        - Statistics are printed to console instead of shown in plot
     """
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
+    # Detect mode (single vs multiple)
+    is_multiple = hasattr(mean_diff, '__iter__') and not isinstance(mean_diff, str)
+
+    # Convert to lists if in multiple mode
+    if is_multiple:
+        mean_diff_list = list(mean_diff)
+        sesoi_list = list(sesoi) if hasattr(sesoi, '__iter__') else [sesoi] * len(mean_diff_list)
+        se_list = list(se) if hasattr(se, '__iter__') else [se] * len(mean_diff_list)
+
+        # Validate all lists have same length
+        if not (len(mean_diff_list) == len(sesoi_list) == len(se_list)):
+            raise ValueError("mean_diff, sesoi, and se must have the same length")
+
+        n_vars = len(mean_diff_list)
+
+        # Validate variable_names
+        if variable_names is None:
+            variable_names = [f"Var{i+1}" for i in range(n_vars)]
+        elif len(variable_names) != n_vars:
+            raise ValueError(f"variable_names must have length {n_vars}")
+    else:
+        # Single mode: wrap in lists for unified processing
+        mean_diff_list = [mean_diff]
+        sesoi_list = [sesoi]
+        se_list = [se]
+        n_vars = 1
+
+        if variable_names is None:
+            variable_names = ["Distribution"]
 
     # Validate inputs
-    if sesoi <= 0:
-        raise ValueError("SESOI (margin) must be a positive value")
-
-    if se <= 0:
-        raise ValueError("Standard error must be positive")
-
     if not 0 < alpha < 1:
         raise ValueError("Alpha must be between 0 and 1")
 
     if test_type not in ['lower', 'upper']:
         raise ValueError("test_type must be 'lower' or 'upper'")
 
-    # Determine the SESOI position and critical value based on test type
-    if test_type == 'lower':
-        # Lower non-inferiority: test if new is not worse than standard
-        # H0: μ_diff ≤ -sesoi  vs  H1: μ_diff > -sesoi
-        sesoi_position = -sesoi
-        # Critical value: lower alpha percentile (e.g., 5th percentile for alpha=0.05)
-        # Non-inferiority requires this lower bound to be > sesoi_position
-        critical_value = mean_diff - stats.norm.ppf(1 - alpha) * se
-        # Non-inferiority zone is to the right of SESOI
-        zone_direction = 'right'
-    else:  # upper
-        # Upper non-inferiority: test if new is not better than standard
-        # H0: μ_diff ≥ sesoi  vs  H1: μ_diff < sesoi
-        sesoi_position = sesoi
-        # Critical value: upper (1-alpha) percentile (e.g., 95th percentile for alpha=0.05)
-        # Non-inferiority requires this upper bound to be < sesoi_position
-        critical_value = mean_diff + stats.norm.ppf(1 - alpha) * se
-        # Non-inferiority zone is to the left of SESOI
-        zone_direction = 'left'
+    for i, (s, se_val) in enumerate(zip(sesoi_list, se_list)):
+        if s <= 0:
+            raise ValueError(f"SESOI (margin) must be positive (index {i}: {s})")
+        if se_val <= 0:
+            raise ValueError(f"Standard error must be positive (index {i}: {se_val})")
 
-    # Calculate confidence interval bounds (two-sided, alpha/2 in each tail)
-    ci_lower = mean_diff - stats.norm.ppf(1 - alpha/2) * se
-    ci_upper = mean_diff + stats.norm.ppf(1 - alpha/2) * se
+    # Create figure if needed
+    if ax is None:
+        if is_multiple:
+            fig, ax = plt.subplots(figsize=(10, 2 + 1.5 * n_vars))
+        else:
+            fig, ax = plt.subplots(figsize=(10, 6))
 
-    # Create x-axis range (cover distribution with some margin, include SESOI)
-    x_min = min(sesoi_position, mean_diff) - 4 * se
-    x_max = max(sesoi_position, mean_diff) + 4 * se
+    # Calculate statistics for all distributions
+    stats_data = []
+    for i in range(n_vars):
+        md = mean_diff_list[i]
+        s = sesoi_list[i]
+        se_val = se_list[i]
+
+        # Determine SESOI position based on test type
+        if test_type == 'lower':
+            sesoi_position = -s
+            zone_direction = 'right'
+        else:
+            sesoi_position = s
+            zone_direction = 'left'
+
+        # compute CI bounds (two-sided)
+        ci_lower = md - stats.norm.ppf(1 - alpha/2) * se_val
+        ci_upper = md + stats.norm.ppf(1 - alpha/2) * se_val
+
+        # Calculate test statistics
+        z_score = (md - sesoi_position) / se_val
+        p_value = 1 - stats.norm.cdf(z_score) if test_type == 'lower' else stats.norm.cdf(z_score)
+
+        # Determine non-inferiority
+        if test_type == 'lower':
+            critical_value = md - stats.norm.ppf(1 - alpha/2) * se_val
+            non_inferior = critical_value > sesoi_position
+        else:
+            critical_value = md + stats.norm.ppf(1 - alpha/2) * se_val
+            non_inferior = critical_value < sesoi_position
+
+        stats_data.append({
+            'mean_diff': md,
+            'sesoi': s,
+            'se': se_val,
+            'sesoi_position': sesoi_position,
+            'ci_lower': ci_lower,
+            'ci_upper': ci_upper,
+            'z_score': z_score,
+            'p_value': p_value,
+            'non_inferior': non_inferior,
+            'zone_direction': zone_direction
+        })
+
+        # Print statistics to console if requested
+        if show_stats:
+            var_label = variable_names[i]
+            if variable_labels and var_label in variable_labels:
+                var_label = variable_labels[var_label]
+
+            _print_noninferiority_report(
+                variable_name=var_label,
+                mean_diff=md,
+                se=se_val,
+                ci_lower=ci_lower,
+                ci_upper=ci_upper,
+                sesoi_position=sesoi_position,
+                z_score=z_score,
+                p_value=p_value,
+                alpha=alpha,
+                non_inferior=non_inferior,
+                test_type=test_type
+            )
+
+    # Calculate global x-axis range
+    all_sesoi_positions = [s['sesoi_position'] for s in stats_data]
+    all_mean_diffs = [s['mean_diff'] for s in stats_data]
+    all_ses = [s['se'] for s in stats_data]
+
+    x_min = min(min(all_sesoi_positions), min(all_mean_diffs)) - 4 * max(all_ses)
+    x_max = max(max(all_sesoi_positions), max(all_mean_diffs)) + 4 * max(all_ses)
     x = np.linspace(x_min, x_max, 1000)
 
-    # Calculate probability density for the distribution centered at mean_diff
-    dist = stats.norm.pdf(x, loc=mean_diff, scale=se)
+    # Plot distributions
+    if is_multiple:
+        # Multiple stacked distributions
+        y_spacing = 1.2  # Vertical spacing between distributions
+        max_pdf = 0  # Track maximum PDF for proper scaling
 
-    # Plot the distribution in black
-    ax.plot(x, dist, color='black', linewidth=STYLE_CONFIG['kde_linewidth'],
-           label=f'Distribution (μ = {mean_diff:.3f}, SE = {se:.3f})', alpha=0.9)
-    ax.fill_between(x, dist, alpha=0.15, color='black')
+        # First pass: calculate maximum PDF value for scaling
+        for i in range(n_vars):
+            dist = stats.norm.pdf(x, loc=stats_data[i]['mean_diff'], scale=stats_data[i]['se'])
+            max_pdf = max(max_pdf, dist.max())
 
-    # Shade both tail regions (alpha/2 in each tail for confidence interval)
-    # Lower tail
-    lower_tail_mask = x <= ci_lower
-    ax.fill_between(x[lower_tail_mask], dist[lower_tail_mask], alpha=0.4, color='lightcoral',
-                   label=f'{alpha/2:.1%} tails')
+        # Normalization factor to fit distributions in y_spacing
+        scale_factor = (y_spacing * 0.8) / max_pdf
 
-    # Upper tail
-    upper_tail_mask = x >= ci_upper
-    ax.fill_between(x[upper_tail_mask], dist[upper_tail_mask], alpha=0.4, color='lightcoral')
+        for i in range(n_vars):
+            y_offset = i * y_spacing
+            md = stats_data[i]['mean_diff']
+            se_val = stats_data[i]['se']
+            sesoi_pos = stats_data[i]['sesoi_position']
+            ci_lower = stats_data[i]['ci_lower']
+            ci_upper = stats_data[i]['ci_upper']
+            zone_dir = stats_data[i]['zone_direction']
 
-    # Get the maximum y value for shading
-    y_max = dist.max()
+            # Calculate PDF and scale it
+            dist = stats.norm.pdf(x, loc=md, scale=se_val)
+            dist_scaled = dist * scale_factor + y_offset
 
-    # Mark zero with a dotted vertical line
-    ax.axvline(0, color='gray', linestyle=':', linewidth=1.5,
-              label='Zero', alpha=0.7)
+            # Plot distribution (black line and fill)
+            ax.plot(x, dist_scaled, color='black', linewidth=STYLE_CONFIG['kde_linewidth'], alpha=0.9)
+            ax.fill_between(x, y_offset, dist_scaled, alpha=0.15, color='black')
 
-    # Mark the SESOI margin with a vertical line
-    ax.axvline(sesoi_position, color='darkgreen', linestyle='-', linewidth=2,
-              label=f'SESOI margin ({sesoi_position:.3f})', alpha=0.7)
+            # Shade tail regions (light coral)
+            lower_tail_mask = x <= ci_lower
+            ax.fill_between(x[lower_tail_mask], y_offset, dist_scaled[lower_tail_mask],
+                           alpha=0.4, color='lightcoral')
 
-    # Shade the non-inferiority zone
-    if zone_direction == 'right':
-        # Shade area to the right of SESOI
-        zone_mask = x >= sesoi_position
-        zone_label = 'Non-inferiority zone'
+            upper_tail_mask = x >= ci_upper
+            ax.fill_between(x[upper_tail_mask], y_offset, dist_scaled[upper_tail_mask],
+                           alpha=0.4, color='lightcoral')
+
+            # Mark SESOI margin (light blue, transparent, limited to this distribution's y-range)
+            ax.plot([sesoi_pos, sesoi_pos], [y_offset, y_offset + y_spacing * 0.9],
+                   color='#87CEEB', linestyle='-', linewidth=2, alpha=0.3, zorder=1)
+
+            # Shade non-inferiority zone (light blue, very transparent)
+            y_top = y_offset + y_spacing * 0.9
+            if zone_dir == 'right':
+                zone_mask = x >= sesoi_pos
+            else:
+                zone_mask = x <= sesoi_pos
+            ax.fill_between(x[zone_mask], y_offset, y_top, alpha=0.08, color='#87CEEB', zorder=0)
+
+            # Direct labeling: Mean and SE in a box (to the right of distribution peak)
+            peak_x = md
+            peak_y = y_offset + y_spacing * 0.8
+            ax.text(peak_x + 0.2, peak_y, f'μ ={md:.2f}\nSE={se_val:.2f}',
+                    fontsize=STYLE_CONFIG['font_size'] - 1, va='top', ha='left',
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='gray', alpha=0.8))
+
+            # Direct labeling: SESOI value (next to SESOI line)
+            ax.text(sesoi_pos, y_offset + y_spacing * 0.5, f'{sesoi_pos:.3f}',
+                   fontsize=STYLE_CONFIG['font_size'] - 1, va='center', ha='right' if zone_dir == 'right' else 'left',
+                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='#87CEEB', alpha=0.7))
+
+            # Add CI horizontal lines and labels
+            ci_y = y_offset + y_spacing * 0.15
+            # Lower CI bound line and label
+            ax.plot([ci_lower, ci_lower], [y_offset, ci_y],
+                   color='lightcoral', linestyle='-', linewidth=1.5, alpha=0.6, zorder=2)
+            ax.text(ci_lower, ci_y + 0.05, f'{ci_lower:.3f}',
+                   fontsize=STYLE_CONFIG['font_size'] - 2, va='bottom', ha='center',
+                   bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='lightcoral', alpha=0.7))
+
+            # Upper CI bound line and label
+            ax.plot([ci_upper, ci_upper], [y_offset, ci_y],
+                   color='lightcoral', linestyle='-', linewidth=1.5, alpha=0.6, zorder=2)
+            ax.text(ci_upper, ci_y + 0.05, f'{ci_upper:.3f}',
+                   fontsize=STYLE_CONFIG['font_size'] - 2, va='bottom', ha='center',
+                   bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='lightcoral', alpha=0.7))
+
+            # Non-inferiority status box (middle left of each subplot)
+            non_inf = stats_data[i]['non_inferior']
+            status_text = 'Non-inferior' if non_inf else 'Not non-inferior'
+            status_color = '#90EE90' if non_inf else '#FFB6C6'  # Light green or light red
+            status_x = x_min + 0.5 * max(all_ses)  # Position near left edge
+            status_y = y_offset + y_spacing * 0.5  # Position at middle height
+            ax.text(status_x, status_y, status_text,
+                   fontsize=STYLE_CONFIG['font_size'] - 1, va='center', ha='left',
+                   bbox=dict(boxstyle='round,pad=0.4', facecolor=status_color,
+                            edgecolor='darkgreen' if non_inf else 'darkred', alpha=0.8, linewidth=1.5))
+
+        # Mark zero with dotted line spanning the whole height
+        ax.axvline(0, color='gray', linestyle=':', linewidth=1.5, alpha=0.5, zorder=1)
+
+        # Y-axis labels (variable names)
+        # Position labels at the middle of each distribution's height
+        y_ticks = [i * y_spacing + y_spacing * 0.45 for i in range(n_vars)]
+        y_labels = []
+        for i, var_name in enumerate(variable_names):
+            if variable_labels and var_name in variable_labels:
+                y_labels.append(variable_labels[var_name])
+            else:
+                y_labels.append(var_name)
+
+        ax.set_yticks(y_ticks)
+        ax.set_yticklabels(y_labels, fontsize=STYLE_CONFIG['font_size'], rotation=90, va='center')
+
+        # Remove y-axis tick marks (but keep labels)
+        ax.tick_params(axis='y', length=0)
+
+        # Set y-limits
+        ax.set_ylim(-0.3, n_vars * y_spacing)
+
+        # Add small legend for non-inferiority margin in top left
+        from matplotlib.lines import Line2D
+        legend_elements = [Line2D([0], [0], color='#87CEEB', linestyle='-',
+                                 linewidth=2, alpha=0.5, label='Non-inferiority margin')]
+        ax.legend(handles=legend_elements, loc='upper left', frameon=True,
+                 fontsize=STYLE_CONFIG['font_size'] - 1, fancybox=True, shadow=False)
+
     else:
-        # Shade area to the left of SESOI
-        zone_mask = x <= sesoi_position
-        zone_label = 'Non-inferiority zone'
+        # Single distribution (backward compatible, but with new styling)
+        md = stats_data[0]['mean_diff']
+        se_val = stats_data[0]['se']
+        sesoi_pos = stats_data[0]['sesoi_position']
+        ci_lower = stats_data[0]['ci_lower']
+        ci_upper = stats_data[0]['ci_upper']
+        zone_dir = stats_data[0]['zone_direction']
 
-    ax.fill_between(x[zone_mask], 0, y_max * 1.1, alpha=0.15, color='green',
-                   label=zone_label)
+        # Calculate PDF
+        dist = stats.norm.pdf(x, loc=md, scale=se_val)
 
-    # Calculate test statistics
-    z_score = (mean_diff - sesoi_position) / se
-    p_value = 1 - stats.norm.cdf(z_score) if test_type == 'lower' else stats.norm.cdf(z_score)
+        # Plot distribution
+        ax.plot(x, dist, color='black', linewidth=STYLE_CONFIG['kde_linewidth'], alpha=0.9)
+        ax.fill_between(x, dist, alpha=0.15, color='black')
 
-    # Determine if non-inferiority is established
-    # For non-inferiority, we check if the confidence bound is in the non-inferiority zone
-    if test_type == 'lower':
-        # Lower bound (critical_value) must be > SESOI margin
-        non_inferior = critical_value > sesoi_position
-    else:
-        # Upper bound (critical_value) must be < SESOI margin
-        non_inferior = critical_value < sesoi_position
+        # Shade tails
+        lower_tail_mask = x <= ci_lower
+        ax.fill_between(x[lower_tail_mask], dist[lower_tail_mask], alpha=0.4, color='lightcoral')
 
-    # Display test statistics if requested
-    if show_stats:
-        stats_text = f"Mean difference: {mean_diff:.3f}\n"
-        stats_text += f"{(1-alpha)*100:.0f}% CI: [{ci_lower:.3f}, {ci_upper:.3f}]\n"
-        if test_type == 'lower':
-            stats_text += f"Lower bound: {critical_value:.3f}\n"
+        upper_tail_mask = x >= ci_upper
+        ax.fill_between(x[upper_tail_mask], dist[upper_tail_mask], alpha=0.4, color='lightcoral')
+
+        # Mark zero
+        ax.axvline(0, color='gray', linestyle=':', linewidth=1.5, alpha=0.7)
+
+        # Mark SESOI (light blue, transparent)
+        ax.axvline(sesoi_pos, color='#87CEEB', linestyle='-', linewidth=2, alpha=0.3)
+
+        # Shade non-inferiority zone (light blue, very transparent)
+        y_max = dist.max()
+        if zone_dir == 'right':
+            zone_mask = x >= sesoi_pos
         else:
-            stats_text += f"Upper bound: {critical_value:.3f}\n"
-        stats_text += f"SESOI (margin): {sesoi_position:.3f}\n"
-        stats_text += f"SE: {se:.3f}\n"
-        stats_text += f"z = {z_score:.3f}\n"
-        stats_text += f"{_format_p_value(p_value)}\n"
-        stats_text += f"α = {alpha:.3f}\n\n"
+            zone_mask = x <= sesoi_pos
+        ax.fill_between(x[zone_mask], 0, y_max * 1.1, alpha=0.08, color='#87CEEB')
 
-        if non_inferior:
-            stats_text += "✓ Non-inferiority\n   established"
-            box_color = 'lightgreen'
-        else:
-            stats_text += "✗ Non-inferiority\n   not established"
-            box_color = 'lightcoral'
+        # Direct labeling
+        peak_y = y_max * 0.95
+        ax.text(md + 1.5 * se_val, peak_y, f'μ={md:.2f}, SE={se_val:.2f}',
+               fontsize=STYLE_CONFIG['font_size'], va='top', ha='left')
 
-        props = dict(boxstyle='round', facecolor=box_color, alpha=0.6)
-        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
-               fontsize=STYLE_CONFIG['font_size'], verticalalignment='top',
-               horizontalalignment='left', bbox=props, family='monospace')
+        ax.text(sesoi_pos, y_max * 0.5, f'{sesoi_pos:.3f}',
+               fontsize=STYLE_CONFIG['font_size'], va='center', ha='right' if zone_dir == 'right' else 'left',
+               bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='#87CEEB', alpha=0.7))
+
+        ax.text(ci_lower, -y_max * 0.02, f'{ci_lower:.3f}',
+               fontsize=STYLE_CONFIG['font_size'] - 1, va='top', ha='center', alpha=0.7)
+        ax.text(ci_upper, -y_max * 0.02, f'{ci_upper:.3f}',
+               fontsize=STYLE_CONFIG['font_size'] - 1, va='top', ha='center', alpha=0.7)
+
+        # Non-inferiority status box (middle left)
+        non_inf = stats_data[0]['non_inferior']
+        status_text = 'Non-inferior' if non_inf else 'Not non-inferior'
+        status_color = '#90EE90' if non_inf else '#FFB6C6'  # Light green or light red
+        status_x = x_min + 0.5 * se_val  # Position near left edge
+        status_y = y_max * 0.5  # Position at middle height
+        ax.text(status_x, status_y, status_text,
+               fontsize=STYLE_CONFIG['font_size'], va='center', ha='left',
+               bbox=dict(boxstyle='round,pad=0.4', facecolor=status_color,
+                        edgecolor='darkgreen' if non_inf else 'darkred', alpha=0.8, linewidth=1.5))
+
+        ylabel = "Probability Density"
+        ax.set_ylim(bottom=0)
 
     # Set labels
     if title is None:
-        title = f"Non-Inferiority Test ({test_type.capitalize()})"
+        if is_multiple:
+            title = f"Non-Inferiority Analysis"
+        else:
+            title = f"Non-Inferiority Test ({test_type.capitalize()})"
 
     if xlabel is None:
         xlabel = "Effect Size"
 
-    ylabel = "Probability Density"
-
-    # Add legend
-    ax.legend(frameon=True, fontsize=STYLE_CONFIG['font_size'],
-             loc='upper right', fancybox=True, shadow=True)
-
-    # Apply consistent styling
-    apply_consistent_style(ax, title=title, xlabel=xlabel, ylabel=ylabel,
-                          title_pad=title_pad)
-
-    # Ensure y-axis starts at 0
-    ax.set_ylim(bottom=0)
+    # Apply styling (no legend)
+    if is_multiple:
+        ylabel = ""
+        apply_consistent_style(ax, title=title, xlabel=xlabel, ylabel=ylabel, title_pad=title_pad)
+    else:
+        ylabel = "Probability Density"
+        apply_consistent_style(ax, title=title, xlabel=xlabel, ylabel=ylabel, title_pad=title_pad)
 
     return ax
 
