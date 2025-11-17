@@ -7,6 +7,7 @@ This module provides consistent, clean visualization functions for different dat
 - Boxplots and mirrored histograms for multi-scale comparisons
 - Split histogram with central boxplot for two-group comparisons
 - Scatterplots with correlation analysis for examining relationships between variables
+- Non-inferiority test visualization with overlapping Gaussian distributions
 
 All functions support optional grouping by experimental condition.
 """
@@ -16,6 +17,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Optional, Tuple, List
+from scipy import stats
 from .utils import get_label_for_value, get_question_statement
 from .stats import (cohens_d, independent_t_test, chi_square_test, cramers_v,
                      fisher_exact_test, one_way_anova, eta_squared,
@@ -2486,6 +2488,198 @@ def plot_scatterplot(data: pd.DataFrame,
     # Apply consistent styling
     apply_consistent_style(ax, title=title, xlabel=xlabel,
                           ylabel=ylabel, title_pad=title_pad)
+
+    return ax
+
+
+def plot_noninferiority_test(mean_diff: float,
+                             sesoi: float,
+                             se: float,
+                             alpha: float = 0.05,
+                             test_type: str = 'lower',
+                             title: Optional[str] = None,
+                             xlabel: Optional[str] = None,
+                             ax: Optional[plt.Axes] = None,
+                             title_pad: Optional[int] = None,
+                             show_stats: bool = True) -> plt.Axes:
+    """
+    Visualize non-inferiority test with two overlapping Gaussian distributions.
+
+    Creates a visualization similar to G*Power showing:
+    - Null distribution centered at the non-inferiority margin (SESOI)
+    - Observed distribution centered at the observed mean difference
+    - Critical value and non-inferiority zone based on alpha level
+
+    This visualization helps interpret one-sided non-inferiority tests where we want
+    to show that a new treatment is not worse than a standard by more than a margin.
+
+    Args:
+        mean_diff: Observed mean difference between samples (e.g., new - standard)
+        sesoi: Smallest Effect Size Of Interest (non-inferiority margin, positive value)
+        se: Standard error of the mean difference
+        alpha: Significance level for the test (default: 0.05)
+        test_type: Type of non-inferiority test:
+                  - 'lower': Test if new is not worse (mean_diff > -sesoi)
+                  - 'upper': Test if new is not better (mean_diff < sesoi)
+                  Default: 'lower'
+        title: Plot title (auto-generated if None)
+        xlabel: X-axis label (default: "Effect Size")
+        ax: Optional matplotlib axes (creates new figure if None)
+        title_pad: Padding between title and plot (uses STYLE_CONFIG default if None)
+        show_stats: Whether to show test statistics in text box (default: True)
+
+    Returns:
+        The matplotlib axes object
+
+    Example:
+        >>> # Lower non-inferiority test (new treatment not worse than standard)
+        >>> # Observed difference: 0.15, margin: -0.3, SE: 0.12, alpha: 0.05
+        >>> plot_noninferiority_test(mean_diff=0.15, sesoi=0.3, se=0.12, alpha=0.05)
+
+        >>> # Upper non-inferiority test (new treatment not better than standard)
+        >>> plot_noninferiority_test(mean_diff=-0.10, sesoi=0.3, se=0.12,
+        ...                          test_type='upper')
+
+        >>> # Custom labels and no statistics
+        >>> plot_noninferiority_test(mean_diff=0.15, sesoi=0.3, se=0.12,
+        ...                          title='Non-Inferiority Analysis',
+        ...                          xlabel='Mean Difference (Cohen\'s d)',
+        ...                          show_stats=False)
+
+    Notes:
+        - For 'lower' non-inferiority: H0: μ_diff ≤ -sesoi vs H1: μ_diff > -sesoi
+        - For 'upper' non-inferiority: H0: μ_diff ≥ sesoi vs H1: μ_diff < sesoi
+        - The SESOI (margin) should always be provided as a positive value
+        - The function automatically handles the sign based on test_type
+    """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Validate inputs
+    if sesoi <= 0:
+        raise ValueError("SESOI (margin) must be a positive value")
+
+    if se <= 0:
+        raise ValueError("Standard error must be positive")
+
+    if not 0 < alpha < 1:
+        raise ValueError("Alpha must be between 0 and 1")
+
+    if test_type not in ['lower', 'upper']:
+        raise ValueError("test_type must be 'lower' or 'upper'")
+
+    # Determine the null hypothesis center and critical value based on test type
+    if test_type == 'lower':
+        # Lower non-inferiority: test if new is not worse than standard
+        # H0: μ_diff ≤ -sesoi  vs  H1: μ_diff > -sesoi
+        null_center = -sesoi
+        critical_value = null_center + stats.norm.ppf(1 - alpha) * se
+        # Non-inferiority zone is to the right of critical value
+        zone_direction = 'right'
+    else:  # upper
+        # Upper non-inferiority: test if new is not better than standard
+        # H0: μ_diff ≥ sesoi  vs  H1: μ_diff < sesoi
+        null_center = sesoi
+        critical_value = null_center - stats.norm.ppf(1 - alpha) * se
+        # Non-inferiority zone is to the left of critical value
+        zone_direction = 'left'
+
+    # Create x-axis range (cover both distributions with some margin)
+    x_min = min(null_center, mean_diff) - 4 * se
+    x_max = max(null_center, mean_diff) + 4 * se
+    x = np.linspace(x_min, x_max, 1000)
+
+    # Calculate probability densities for both distributions
+    null_dist = stats.norm.pdf(x, loc=null_center, scale=se)
+    observed_dist = stats.norm.pdf(x, loc=mean_diff, scale=se)
+
+    # Plot the null distribution (centered at margin)
+    ax.plot(x, null_dist, color=COLORS['secondary'], linewidth=STYLE_CONFIG['kde_linewidth'],
+           label=f'H₀ distribution (μ = {null_center:.3f})', alpha=0.9)
+    ax.fill_between(x, null_dist, alpha=0.2, color=COLORS['secondary'])
+
+    # Plot the observed distribution (centered at mean difference)
+    ax.plot(x, observed_dist, color=COLORS['primary'], linewidth=STYLE_CONFIG['kde_linewidth'],
+           label=f'Observed distribution (μ = {mean_diff:.3f})', alpha=0.9)
+    ax.fill_between(x, observed_dist, alpha=0.2, color=COLORS['primary'])
+
+    # Mark the critical value
+    y_max = max(null_dist.max(), observed_dist.max())
+    ax.axvline(critical_value, color='black', linestyle='--', linewidth=1.5,
+              label=f'Critical value ({critical_value:.3f})', alpha=0.7)
+
+    # Shade the non-inferiority zone
+    if zone_direction == 'right':
+        # Shade area to the right of critical value
+        zone_mask = x >= critical_value
+        zone_label = 'Non-inferiority zone'
+    else:
+        # Shade area to the left of critical value
+        zone_mask = x <= critical_value
+        zone_label = 'Non-inferiority zone'
+
+    ax.fill_between(x[zone_mask], 0, y_max * 1.1, alpha=0.15, color='green',
+                   label=zone_label)
+
+    # Mark the SESOI margin
+    ax.axvline(null_center, color=COLORS['secondary'], linestyle=':', linewidth=2,
+              alpha=0.7)
+
+    # Mark the observed mean difference
+    ax.axvline(mean_diff, color=COLORS['primary'], linestyle=':', linewidth=2,
+              alpha=0.7)
+
+    # Calculate test statistics
+    z_score = (mean_diff - null_center) / se
+    p_value = 1 - stats.norm.cdf(z_score) if test_type == 'lower' else stats.norm.cdf(z_score)
+
+    # Determine if non-inferiority is established
+    if test_type == 'lower':
+        non_inferior = mean_diff > critical_value
+    else:
+        non_inferior = mean_diff < critical_value
+
+    # Display test statistics if requested
+    if show_stats:
+        stats_text = f"Mean difference: {mean_diff:.3f}\n"
+        stats_text += f"SESOI (margin): ±{sesoi:.3f}\n"
+        stats_text += f"SE: {se:.3f}\n"
+        stats_text += f"Critical value: {critical_value:.3f}\n"
+        stats_text += f"z = {z_score:.3f}\n"
+        stats_text += f"{_format_p_value(p_value)}\n"
+        stats_text += f"α = {alpha:.3f}\n\n"
+
+        if non_inferior:
+            stats_text += "✓ Non-inferiority\n   established"
+            box_color = 'lightgreen'
+        else:
+            stats_text += "✗ Non-inferiority\n   not established"
+            box_color = 'lightcoral'
+
+        props = dict(boxstyle='round', facecolor=box_color, alpha=0.6)
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
+               fontsize=STYLE_CONFIG['font_size'], verticalalignment='top',
+               horizontalalignment='left', bbox=props, family='monospace')
+
+    # Set labels
+    if title is None:
+        title = f"Non-Inferiority Test ({test_type.capitalize()})"
+
+    if xlabel is None:
+        xlabel = "Effect Size"
+
+    ylabel = "Probability Density"
+
+    # Add legend
+    ax.legend(frameon=True, fontsize=STYLE_CONFIG['font_size'],
+             loc='upper right', fancybox=True, shadow=True)
+
+    # Apply consistent styling
+    apply_consistent_style(ax, title=title, xlabel=xlabel, ylabel=ylabel,
+                          title_pad=title_pad)
+
+    # Ensure y-axis starts at 0
+    ax.set_ylim(bottom=0)
 
     return ax
 
