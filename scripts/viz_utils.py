@@ -2503,15 +2503,18 @@ def plot_noninferiority_test(mean_diff: float,
                              title_pad: Optional[int] = None,
                              show_stats: bool = True) -> plt.Axes:
     """
-    Visualize non-inferiority test with two overlapping Gaussian distributions.
+    Visualize non-inferiority test with a Gaussian distribution and SESOI margin.
 
-    Creates a visualization similar to G*Power showing:
-    - Null distribution centered at the non-inferiority margin (SESOI)
-    - Observed distribution centered at the observed mean difference
-    - Critical value and non-inferiority zone based on alpha level
+    Creates a visualization showing:
+    - Gaussian distribution centered at the observed mean difference
+    - SESOI (non-inferiority margin) marked with a vertical line
+    - Non-inferiority zone shaded (right of SESOI for lower test, left for upper test)
+    - Both tails highlighted (alpha/2 in each) showing the confidence interval
+    - Dotted line at zero to assess if mean difference is significantly different from zero
 
-    This visualization helps interpret one-sided non-inferiority tests where we want
-    to show that a new treatment is not worse than a standard by more than a margin.
+    For a lower non-inferiority test, non-inferiority is established when the lower
+    confidence bound (alpha-percentile) is greater than the SESOI margin, meaning
+    we can be confident the new treatment is not worse by more than the margin.
 
     Args:
         mean_diff: Observed mean difference between samples (e.g., new - standard)
@@ -2568,83 +2571,100 @@ def plot_noninferiority_test(mean_diff: float,
     if test_type not in ['lower', 'upper']:
         raise ValueError("test_type must be 'lower' or 'upper'")
 
-    # Determine the null hypothesis center and critical value based on test type
+    # Determine the SESOI position and critical value based on test type
     if test_type == 'lower':
         # Lower non-inferiority: test if new is not worse than standard
         # H0: μ_diff ≤ -sesoi  vs  H1: μ_diff > -sesoi
-        null_center = -sesoi
-        critical_value = null_center + stats.norm.ppf(1 - alpha) * se
-        # Non-inferiority zone is to the right of critical value
+        sesoi_position = -sesoi
+        # Critical value: lower alpha percentile (e.g., 5th percentile for alpha=0.05)
+        # Non-inferiority requires this lower bound to be > sesoi_position
+        critical_value = mean_diff - stats.norm.ppf(1 - alpha) * se
+        # Non-inferiority zone is to the right of SESOI
         zone_direction = 'right'
     else:  # upper
         # Upper non-inferiority: test if new is not better than standard
         # H0: μ_diff ≥ sesoi  vs  H1: μ_diff < sesoi
-        null_center = sesoi
-        critical_value = null_center - stats.norm.ppf(1 - alpha) * se
-        # Non-inferiority zone is to the left of critical value
+        sesoi_position = sesoi
+        # Critical value: upper (1-alpha) percentile (e.g., 95th percentile for alpha=0.05)
+        # Non-inferiority requires this upper bound to be < sesoi_position
+        critical_value = mean_diff + stats.norm.ppf(1 - alpha) * se
+        # Non-inferiority zone is to the left of SESOI
         zone_direction = 'left'
 
-    # Create x-axis range (cover both distributions with some margin)
-    x_min = min(null_center, mean_diff) - 4 * se
-    x_max = max(null_center, mean_diff) + 4 * se
+    # Calculate confidence interval bounds (two-sided, alpha/2 in each tail)
+    ci_lower = mean_diff - stats.norm.ppf(1 - alpha/2) * se
+    ci_upper = mean_diff + stats.norm.ppf(1 - alpha/2) * se
+
+    # Create x-axis range (cover distribution with some margin, include SESOI)
+    x_min = min(sesoi_position, mean_diff) - 4 * se
+    x_max = max(sesoi_position, mean_diff) + 4 * se
     x = np.linspace(x_min, x_max, 1000)
 
-    # Calculate probability densities for both distributions
-    null_dist = stats.norm.pdf(x, loc=null_center, scale=se)
-    observed_dist = stats.norm.pdf(x, loc=mean_diff, scale=se)
+    # Calculate probability density for the distribution centered at mean_diff
+    dist = stats.norm.pdf(x, loc=mean_diff, scale=se)
 
-    # Plot the null distribution (centered at margin)
-    ax.plot(x, null_dist, color=COLORS['secondary'], linewidth=STYLE_CONFIG['kde_linewidth'],
-           label=f'H₀ distribution (μ = {null_center:.3f})', alpha=0.9)
-    ax.fill_between(x, null_dist, alpha=0.2, color=COLORS['secondary'])
+    # Plot the distribution in black
+    ax.plot(x, dist, color='black', linewidth=STYLE_CONFIG['kde_linewidth'],
+           label=f'Distribution (μ = {mean_diff:.3f}, SE = {se:.3f})', alpha=0.9)
+    ax.fill_between(x, dist, alpha=0.15, color='black')
 
-    # Plot the observed distribution (centered at mean difference)
-    ax.plot(x, observed_dist, color=COLORS['primary'], linewidth=STYLE_CONFIG['kde_linewidth'],
-           label=f'Observed distribution (μ = {mean_diff:.3f})', alpha=0.9)
-    ax.fill_between(x, observed_dist, alpha=0.2, color=COLORS['primary'])
+    # Shade both tail regions (alpha/2 in each tail for confidence interval)
+    # Lower tail
+    lower_tail_mask = x <= ci_lower
+    ax.fill_between(x[lower_tail_mask], dist[lower_tail_mask], alpha=0.4, color='lightcoral',
+                   label=f'{alpha/2:.1%} tails')
 
-    # Mark the critical value
-    y_max = max(null_dist.max(), observed_dist.max())
-    ax.axvline(critical_value, color='black', linestyle='--', linewidth=1.5,
-              label=f'Critical value ({critical_value:.3f})', alpha=0.7)
+    # Upper tail
+    upper_tail_mask = x >= ci_upper
+    ax.fill_between(x[upper_tail_mask], dist[upper_tail_mask], alpha=0.4, color='lightcoral')
+
+    # Get the maximum y value for shading
+    y_max = dist.max()
+
+    # Mark zero with a dotted vertical line
+    ax.axvline(0, color='gray', linestyle=':', linewidth=1.5,
+              label='Zero', alpha=0.7)
+
+    # Mark the SESOI margin with a vertical line
+    ax.axvline(sesoi_position, color='darkgreen', linestyle='-', linewidth=2,
+              label=f'SESOI margin ({sesoi_position:.3f})', alpha=0.7)
 
     # Shade the non-inferiority zone
     if zone_direction == 'right':
-        # Shade area to the right of critical value
-        zone_mask = x >= critical_value
+        # Shade area to the right of SESOI
+        zone_mask = x >= sesoi_position
         zone_label = 'Non-inferiority zone'
     else:
-        # Shade area to the left of critical value
-        zone_mask = x <= critical_value
+        # Shade area to the left of SESOI
+        zone_mask = x <= sesoi_position
         zone_label = 'Non-inferiority zone'
 
     ax.fill_between(x[zone_mask], 0, y_max * 1.1, alpha=0.15, color='green',
                    label=zone_label)
 
-    # Mark the SESOI margin
-    ax.axvline(null_center, color=COLORS['secondary'], linestyle=':', linewidth=2,
-              alpha=0.7)
-
-    # Mark the observed mean difference
-    ax.axvline(mean_diff, color=COLORS['primary'], linestyle=':', linewidth=2,
-              alpha=0.7)
-
     # Calculate test statistics
-    z_score = (mean_diff - null_center) / se
+    z_score = (mean_diff - sesoi_position) / se
     p_value = 1 - stats.norm.cdf(z_score) if test_type == 'lower' else stats.norm.cdf(z_score)
 
     # Determine if non-inferiority is established
+    # For non-inferiority, we check if the confidence bound is in the non-inferiority zone
     if test_type == 'lower':
-        non_inferior = mean_diff > critical_value
+        # Lower bound (critical_value) must be > SESOI margin
+        non_inferior = critical_value > sesoi_position
     else:
-        non_inferior = mean_diff < critical_value
+        # Upper bound (critical_value) must be < SESOI margin
+        non_inferior = critical_value < sesoi_position
 
     # Display test statistics if requested
     if show_stats:
         stats_text = f"Mean difference: {mean_diff:.3f}\n"
-        stats_text += f"SESOI (margin): ±{sesoi:.3f}\n"
+        stats_text += f"{(1-alpha)*100:.0f}% CI: [{ci_lower:.3f}, {ci_upper:.3f}]\n"
+        if test_type == 'lower':
+            stats_text += f"Lower bound: {critical_value:.3f}\n"
+        else:
+            stats_text += f"Upper bound: {critical_value:.3f}\n"
+        stats_text += f"SESOI (margin): {sesoi_position:.3f}\n"
         stats_text += f"SE: {se:.3f}\n"
-        stats_text += f"Critical value: {critical_value:.3f}\n"
         stats_text += f"z = {z_score:.3f}\n"
         stats_text += f"{_format_p_value(p_value)}\n"
         stats_text += f"α = {alpha:.3f}\n\n"
