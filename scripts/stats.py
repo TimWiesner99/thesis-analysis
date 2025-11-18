@@ -937,3 +937,109 @@ def print_moderation_results(results: dict, show_interpretation: bool = True) ->
         else:
             print(f"  No significant moderation effect detected.")
     print(f"{'='*80}\n")
+
+
+def interpret_moderation(b_interaction: float, p_interaction: float, moderator: str,
+                        moderated_var: str = "intervention") -> str:
+    """
+    Generate interpretation text for a moderation effect.
+
+    Creates human-readable interpretation of an interaction effect that can be
+    saved to CSV files or displayed in reports.
+
+    Args:
+        b_interaction: Interaction coefficient (β₃)
+        p_interaction: P-value for interaction effect
+        moderator: Name of the moderating variable
+        moderated_var: Name of the variable being moderated (default: "intervention")
+
+    Returns:
+        String interpretation of the moderation effect
+
+    Example:
+        >>> interpret_moderation(0.092, 0.460, "ATI")
+        'No significant moderation detected (p = .460)'
+
+        >>> interpret_moderation(-0.014, 0.048, "Age")
+        'Significant moderation (p = .048): The effect of intervention decreases as Age increases'
+    """
+    if p_interaction < 0.05:
+        direction = "increases" if b_interaction > 0 else "decreases"
+        sig_level = "p < .001" if p_interaction < 0.001 else f"p = {p_interaction:.3f}"
+        return f"Significant moderation ({sig_level}): The effect of {moderated_var} {direction} as {moderator} increases"
+    else:
+        return f"No significant moderation detected (p = {p_interaction:.3f})"
+
+
+def interpret_direct_effect(b_moderator: float, p_moderator: float,
+                           moderator: str, outcome: str) -> str:
+    """
+    Generate interpretation text for a direct effect (main effect of moderator).
+
+    Creates human-readable interpretation of a predictor's main effect on an outcome
+    that can be saved to CSV files or displayed in reports.
+
+    Args:
+        b_moderator: Regression coefficient for moderator (β₂)
+        p_moderator: P-value for moderator effect
+        moderator: Name of the predictor variable
+        outcome: Name of the outcome variable
+
+    Returns:
+        String interpretation of the direct effect
+
+    Example:
+        >>> interpret_direct_effect(0.304, 0.0001, "ATI", "TiA_f")
+        'Significant positive effect (p < .001): Higher ATI predicts higher TiA_f'
+
+        >>> interpret_direct_effect(-0.142, 0.014, "ATI", "TiA_up")
+        'Significant negative effect (p = .014): Higher ATI predicts lower TiA_up'
+
+        >>> interpret_direct_effect(0.047, 0.448, "ATI", "TiA_t")
+        'No significant effect detected (p = .448)'
+    """
+    if p_moderator < 0.05:
+        direction = "positive" if b_moderator > 0 else "negative"
+        pred_direction = "higher" if b_moderator > 0 else "lower"
+        sig_level = "p < .001" if p_moderator < 0.001 else f"p = {p_moderator:.3f}"
+        return f"Significant {direction} effect ({sig_level}): Higher {moderator} predicts {pred_direction} {outcome}"
+    else:
+        return f"No significant effect detected (p = {p_moderator:.3f})"
+
+
+def format_effect_with_stars(beta: float, p_value: float) -> str:
+    """
+    Format a regression coefficient with APA-style significance stars.
+
+    Follows APA guidelines for significance markers:
+    - *** for p < .001
+    - ** for p < .01
+    - * for p < .05
+    - No marker for p >= .05
+
+    Args:
+        beta: Regression coefficient
+        p_value: P-value for the coefficient
+
+    Returns:
+        Formatted string with coefficient and stars (e.g., "0.304***" or "0.047")
+
+    Example:
+        >>> format_effect_with_stars(0.304, 0.0001)
+        '0.304***'
+
+        >>> format_effect_with_stars(-0.142, 0.014)
+        '-0.142*'
+
+        >>> format_effect_with_stars(0.047, 0.448)
+        '0.047'
+    """
+    stars = ""
+    if p_value < 0.001:
+        stars = "***"
+    elif p_value < 0.01:
+        stars = "**"
+    elif p_value < 0.05:
+        stars = "*"
+
+    return f"{beta:.3f}{stars}"
