@@ -1,7 +1,103 @@
 import numpy as np
 import pandas as pd
 from scipy import stats
+import statsmodels.formula.api as smf
+import statsmodels.api as sm
+from statsmodels.stats.multitest import multipletests
+from pathlib import Path
+import warnings
 
+def test_moderation(df, outcome, moderator, moderator_centered, categorical=False):
+    """
+    Test moderation effect using regression with interaction term.
+
+    Parameters:
+    -----------
+    df : DataFrame
+        Data containing all variables
+    outcome : str
+        Name of outcome variable (e.g., 'TiA_t')
+    moderator : str
+        Name of moderator variable (for display)
+    moderator_centered : str
+        Name of centered/coded moderator variable to use in model
+    categorical : bool
+        Whether moderator is categorical (affects interpretation)
+
+    Returns:
+    --------
+    dict : Dictionary containing key statistics
+    model : Fitted statsmodels regression model
+    """
+    # Create interaction term
+    df_temp = df.copy()
+    df_temp['interaction'] = df_temp['group_effect'] * df_temp[moderator_centered]
+
+    # Fit regression model: Y ~ X + M + X*M
+    formula = f'{outcome} ~ group_effect + {moderator_centered} + interaction'
+    model = smf.ols(formula, data=df_temp).fit()
+
+    # Extract key statistics
+    results = {
+        'outcome': outcome,
+        'moderator': moderator,
+        'n': int(model.nobs),
+        'r_squared': model.rsquared,
+        'adj_r_squared': model.rsquared_adj,
+        # Main effect of group (conditional effect when M = 0, i.e., at mean)
+        'b_group': model.params['group_effect'],
+        'se_group': model.bse['group_effect'],
+        'p_group': model.pvalues['group_effect'],
+        'ci_group_lower': model.conf_int().loc['group_effect', 0],
+        'ci_group_upper': model.conf_int().loc['group_effect', 1],
+        # Main effect of moderator
+        'b_moderator': model.params[moderator_centered],
+        'se_moderator': model.bse[moderator_centered],
+        'p_moderator': model.pvalues[moderator_centered],
+        # Interaction effect (the moderation effect)
+        'b_interaction': model.params['interaction'],
+        'se_interaction': model.bse['interaction'],
+        'p_interaction': model.pvalues['interaction'],
+        'ci_interaction_lower': model.conf_int().loc['interaction', 0],
+        'ci_interaction_upper': model.conf_int().loc['interaction', 1],
+    }
+
+    return results, model
+
+def print_moderation_results(results):
+    """
+    Print moderation results in a readable format.
+    """
+    print(f"\n{'='*80}")
+    print(f"Outcome: {results['outcome']} | Moderator: {results['moderator']}")
+    print(f"{'='*80}")
+    print(f"N = {results['n']}, R² = {results['r_squared']:.4f}, Adj. R² = {results['adj_r_squared']:.4f}")
+    print(f"\n{'Coefficient':<25} {'β':<10} {'SE':<10} {'95% CI':<25} {'p':<10}")
+    print(f"{'-'*80}")
+
+    # Group main effect
+    ci_group = f"[{results['ci_group_lower']:>6.3f}, {results['ci_group_upper']:>6.3f}]"
+    p_group = f"{results['p_group']:.4f}" if results['p_group'] >= 0.001 else "<.001"
+    print(f"{'Group (conditional)':<25} {results['b_group']:<10.4f} {results['se_group']:<10.4f} {ci_group:<25} {p_group:<10}")
+
+    # Moderator main effect
+    p_mod = f"{results['p_moderator']:.4f}" if results['p_moderator'] >= 0.001 else "<.001"
+    print(f"{results['moderator']:<25} {results['b_moderator']:<10.4f} {results['se_moderator']:<10.4f} {'':25} {p_mod:<10}")
+
+    # Interaction effect
+    ci_int = f"[{results['ci_interaction_lower']:>6.3f}, {results['ci_interaction_upper']:>6.3f}]"
+    p_int = f"{results['p_interaction']:.4f}" if results['p_interaction'] >= 0.001 else "<.001"
+    sig_marker = " ***" if results['p_interaction'] < 0.001 else " **" if results['p_interaction'] < 0.01 else " *" if results['p_interaction'] < 0.05 else ""
+    print(f"{'Interaction':<25} {results['b_interaction']:<10.4f} {results['se_interaction']:<10.4f} {ci_int:<25} {p_int:<10}{sig_marker}")
+
+    print(f"\n{'Interpretation:':<25}")
+    if results['p_interaction'] < 0.05:
+        direction = "increases" if results['b_interaction'] > 0 else "decreases"
+        print(f"  Significant moderation: The effect of uncertainty communication {direction}")
+        print(f"  as {results['moderator']} increases.")
+    else:
+        print(f"  No significant moderation effect detected.")
+    print(f"{'='*80}\n")
 def cohens_d(group1: pd.Series, group2: pd.Series) -> float:
     """
     Calculate Cohen's d effect size between two groups.
@@ -651,3 +747,193 @@ def spearman_correlation(x: pd.Series, y: pd.Series) -> tuple[float, float]:
     rho_value, p_value = stats.spearmanr(x_clean, y_clean)
 
     return rho_value, p_value
+
+
+def moderation_analysis(df: pd.DataFrame, outcome: str, group_var: str,
+                       moderator: str, moderator_name: str = None) -> tuple[dict, object]:
+    """
+    Test moderation effect using multiple regression with interaction term.
+
+    Moderation analysis tests whether the relationship between a predictor (X) and
+    outcome (Y) depends on the level of a third variable (M, the moderator). This is
+    implemented via regression with an interaction term:
+
+        Y = β₀ + β₁X + β₂M + β₃(X×M) + ε
+
+    The interaction coefficient (β₃) represents the moderation effect. A significant
+    β₃ indicates that the effect of X on Y changes as M increases.
+
+    **Best practices implemented:**
+    - Continuous moderators should be mean-centered before calling this function
+    - Categorical predictors should use effect coding (-0.5, 0.5) for symmetric interpretation
+    - The function returns both a results dictionary and the full fitted model for diagnostics
+
+    **Interpretation:**
+    - β₁ (group effect): Effect of X when moderator = 0 (i.e., at mean if centered)
+    - β₂ (moderator effect): Effect of moderator when X = 0
+    - β₃ (interaction): How much the X→Y effect changes per unit increase in M
+
+    Args:
+        df: DataFrame containing all variables
+        outcome: Name of dependent variable column
+        group_var: Name of independent variable column (e.g., treatment group)
+                  Should be effect-coded (-0.5, 0.5) for best interpretation
+        moderator: Name of moderator variable column
+                  Should be mean-centered if continuous
+        moderator_name: Optional display name for moderator (defaults to moderator column name)
+
+    Returns:
+        Tuple of (results_dict, fitted_model) where:
+            - results_dict: Dictionary containing regression statistics including:
+                * outcome, moderator: Variable names
+                * n: Sample size
+                * r_squared, adj_r_squared: Model fit statistics
+                * b_group, se_group, p_group: Main effect of group
+                * b_moderator, se_moderator, p_moderator: Main effect of moderator
+                * b_interaction, se_interaction, p_interaction: Interaction effect
+                * ci_group_lower/upper: 95% CI for group effect
+                * ci_interaction_lower/upper: 95% CI for interaction
+            - fitted_model: statsmodels OLS regression results object for diagnostics
+
+    Example:
+        >>> # Prepare variables (effect code group, center moderator)
+        >>> df['group_effect'] = df['stimulus_group'].map({'control': -0.5, 'uncertainty': 0.5})
+        >>> df['ati_c'] = df['ati'] - df['ati'].mean()
+        >>>
+        >>> # Test moderation
+        >>> results, model = moderation_analysis(df, 'tia_t', 'group_effect', 'ati_c', 'ATI')
+        >>> print(f"Interaction: β = {results['b_interaction']:.3f}, p = {results['p_interaction']:.3f}")
+        Interaction: β = 0.092, p = 0.460
+        >>>
+        >>> # Check residuals for diagnostics
+        >>> import matplotlib.pyplot as plt
+        >>> plt.scatter(model.fittedvalues, model.resid)
+
+    Notes:
+        - Requires statsmodels package
+        - Assumes ordinary least squares regression is appropriate
+        - Does not check model assumptions (linearity, homoscedasticity, etc.)
+        - For significant interactions, follow up with simple slopes analysis
+
+    References:
+        Hayes, A. F. (2018). Introduction to mediation, moderation, and conditional
+        process analysis (2nd ed.). Guilford Press.
+    """
+    import statsmodels.formula.api as smf
+
+    # Use provided name or default to variable name
+    if moderator_name is None:
+        moderator_name = moderator
+
+    # Create interaction term
+    df_temp = df.copy()
+    df_temp['interaction'] = df_temp[group_var] * df_temp[moderator]
+
+    # Fit regression model: Y ~ X + M + X*M
+    formula = f'{outcome} ~ {group_var} + {moderator} + interaction'
+    model = smf.ols(formula, data=df_temp).fit()
+
+    # Extract key statistics
+    results = {
+        'outcome': outcome,
+        'moderator': moderator_name,
+        'n': int(model.nobs),
+        'r_squared': model.rsquared,
+        'adj_r_squared': model.rsquared_adj,
+        # Main effect of group (conditional effect when M = 0, i.e., at mean if centered)
+        'b_group': model.params[group_var],
+        'se_group': model.bse[group_var],
+        'p_group': model.pvalues[group_var],
+        'ci_group_lower': model.conf_int().loc[group_var, 0],
+        'ci_group_upper': model.conf_int().loc[group_var, 1],
+        # Main effect of moderator
+        'b_moderator': model.params[moderator],
+        'se_moderator': model.bse[moderator],
+        'p_moderator': model.pvalues[moderator],
+        # Interaction effect (the moderation effect)
+        'b_interaction': model.params['interaction'],
+        'se_interaction': model.bse['interaction'],
+        'p_interaction': model.pvalues['interaction'],
+        'ci_interaction_lower': model.conf_int().loc['interaction', 0],
+        'ci_interaction_upper': model.conf_int().loc['interaction', 1],
+    }
+
+    return results, model
+
+
+def print_moderation_results(results: dict, show_interpretation: bool = True) -> None:
+    """
+    Print moderation analysis results in a formatted, readable table.
+
+    Displays regression coefficients, standard errors, confidence intervals, and
+    p-values for the group effect, moderator effect, and interaction effect from
+    a moderation analysis. Optionally includes an interpretation of the findings.
+
+    Args:
+        results: Dictionary of results from moderation_analysis() function
+                Must contain keys: outcome, moderator, n, r_squared, adj_r_squared,
+                b_group, se_group, p_group, ci_group_lower, ci_group_upper,
+                b_moderator, se_moderator, p_moderator,
+                b_interaction, se_interaction, p_interaction,
+                ci_interaction_lower, ci_interaction_upper
+        show_interpretation: If True, prints interpretation of interaction effect
+                            (default: True)
+
+    Returns:
+        None (prints to stdout)
+
+    Example:
+        >>> results, model = moderation_analysis(df, 'tia_t', 'group_effect', 'ati_c', 'ATI')
+        >>> print_moderation_results(results)
+        ================================================================================
+        Outcome: tia_t | Moderator: ATI
+        ================================================================================
+        N = 255, R² = 0.0072, Adj. R² = -0.0047
+
+        Coefficient               β          SE         95% CI                    p
+        --------------------------------------------------------------------------------
+        Group (conditional)       -0.0843    0.0996     [-0.280,  0.112]          0.3978
+        ATI                       0.0472     0.0621                                0.4479
+        Interaction               0.0919     0.1242     [-0.153,  0.337]          0.4600
+
+        Interpretation:
+          No significant moderation effect detected.
+        ================================================================================
+
+    Notes:
+        - Significance markers: *** p<.001, ** p<.01, * p<.05
+        - P-values < .001 are displayed as "<.001"
+        - Confidence intervals shown only for group and interaction effects
+        - Interpretation based on p < .05 threshold for interaction
+    """
+    print(f"\n{'='*80}")
+    print(f"Outcome: {results['outcome']} | Moderator: {results['moderator']}")
+    print(f"{'='*80}")
+    print(f"N = {results['n']}, R² = {results['r_squared']:.4f}, Adj. R² = {results['adj_r_squared']:.4f}")
+    print(f"\n{'Coefficient':<25} {'β':<10} {'SE':<10} {'95% CI':<25} {'p':<10}")
+    print(f"{'-'*80}")
+
+    # Group main effect
+    ci_group = f"[{results['ci_group_lower']:>6.3f}, {results['ci_group_upper']:>6.3f}]"
+    p_group = f"{results['p_group']:.4f}" if results['p_group'] >= 0.001 else "<.001"
+    print(f"{'Group (conditional)':<25} {results['b_group']:<10.4f} {results['se_group']:<10.4f} {ci_group:<25} {p_group:<10}")
+
+    # Moderator main effect
+    p_mod = f"{results['p_moderator']:.4f}" if results['p_moderator'] >= 0.001 else "<.001"
+    print(f"{results['moderator']:<25} {results['b_moderator']:<10.4f} {results['se_moderator']:<10.4f} {'':25} {p_mod:<10}")
+
+    # Interaction effect
+    ci_int = f"[{results['ci_interaction_lower']:>6.3f}, {results['ci_interaction_upper']:>6.3f}]"
+    p_int = f"{results['p_interaction']:.4f}" if results['p_interaction'] >= 0.001 else "<.001"
+    sig_marker = " ***" if results['p_interaction'] < 0.001 else " **" if results['p_interaction'] < 0.01 else " *" if results['p_interaction'] < 0.05 else ""
+    print(f"{'Interaction':<25} {results['b_interaction']:<10.4f} {results['se_interaction']:<10.4f} {ci_int:<25} {p_int:<10}{sig_marker}")
+
+    if show_interpretation:
+        print(f"\n{'Interpretation:':<25}")
+        if results['p_interaction'] < 0.05:
+            direction = "increases" if results['b_interaction'] > 0 else "decreases"
+            print(f"  Significant moderation: The effect of the intervention {direction}")
+            print(f"  as {results['moderator']} increases.")
+        else:
+            print(f"  No significant moderation effect detected.")
+    print(f"{'='*80}\n")
