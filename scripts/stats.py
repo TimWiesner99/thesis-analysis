@@ -1,3 +1,4 @@
+from typing import Optional
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -7,7 +8,7 @@ from statsmodels.stats.multitest import multipletests
 from pathlib import Path
 import warnings
 
-def test_moderation(df, outcome, moderator, moderator_centered, categorical=False):
+def test_moderation(df, independent, dependent, moderator_centered, categorical=False, name: Optional[str]=None):
     """
     Test moderation effect using regression with interaction term.
 
@@ -15,14 +16,16 @@ def test_moderation(df, outcome, moderator, moderator_centered, categorical=Fals
     -----------
     df : DataFrame
         Data containing all variables
-    outcome : str
-        Name of outcome variable (e.g., 'TiA_t')
-    moderator : str
-        Name of moderator variable (for display)
+    independent : str
+        Name of independent variable (e.g., 'group_effect')
+    dependent : str
+        Name of dependent variable (e.g., 'TiA_t')
     moderator_centered : str
         Name of centered/coded moderator variable to use in model
     categorical : bool
         Whether moderator is categorical (affects interpretation)
+    name : str
+        Name of moderator variable (for display)
 
     Returns:
     --------
@@ -31,16 +34,16 @@ def test_moderation(df, outcome, moderator, moderator_centered, categorical=Fals
     """
     # Create interaction term
     df_temp = df.copy()
-    df_temp['interaction'] = df_temp['group_effect'] * df_temp[moderator_centered]
+    df_temp['interaction'] = df_temp[independent] * df_temp[moderator_centered]
 
     # Fit regression model: Y ~ X + M + X*M
-    formula = f'{outcome} ~ group_effect + {moderator_centered} + interaction'
+    formula = f'{dependent} ~ {independent} + {moderator_centered} + interaction'
     model = smf.ols(formula, data=df_temp).fit()
 
     # Extract key statistics
     results = {
-        'outcome': outcome,
-        'moderator': moderator,
+        'outcome': dependent,
+        'moderator': name,
         'n': int(model.nobs),
         'r_squared': model.rsquared,
         'adj_r_squared': model.rsquared_adj,
@@ -98,6 +101,7 @@ def print_moderation_results(results):
     else:
         print(f"  No significant moderation effect detected.")
     print(f"{'='*80}\n")
+
 def cohens_d(group1: pd.Series, group2: pd.Series) -> float:
     """
     Calculate Cohen's d effect size between two groups.
@@ -966,7 +970,7 @@ def interpret_moderation(b_interaction: float, p_interaction: float, moderator: 
     if p_interaction < 0.05:
         direction = "increases" if b_interaction > 0 else "decreases"
         sig_level = "p < .001" if p_interaction < 0.001 else f"p = {p_interaction:.3f}"
-        return f"Significant moderation ({sig_level}): The effect of {moderated_var} {direction} as {moderator} increases"
+        return f"Significant moderation ({sig_level}): The effect of \"{moderated_var}\" {direction} as \"{moderator}\" increases"
     else:
         return f"No significant moderation detected (p = {p_interaction:.3f})"
 
@@ -1002,7 +1006,7 @@ def interpret_direct_effect(b_moderator: float, p_moderator: float,
         direction = "positive" if b_moderator > 0 else "negative"
         pred_direction = "higher" if b_moderator > 0 else "lower"
         sig_level = "p < .001" if p_moderator < 0.001 else f"p = {p_moderator:.3f}"
-        return f"Significant {direction} effect ({sig_level}): Higher {moderator} predicts {pred_direction} {outcome}"
+        return f"Significant {direction} effect ({sig_level}): Higher \"{moderator}\" predicts {pred_direction} \"{outcome}\""
     else:
         return f"No significant effect detected (p = {p_moderator:.3f})"
 
