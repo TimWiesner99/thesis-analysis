@@ -1,5 +1,5 @@
 # define variable names
-tia_scales = ['tia_f', 'tia_pro', 'tia_rc', 'tia_t', 'tia_up', 'tia_comp']
+tia_scales = ['tia_f', 'tia_pro', 'tia_rc', 'tia_t', 'tia_up']
 hcsds_scales = ['hcsds_c', 'hcsds_v']
 ati_scales = ['ati']
 manip_check_scales = [f'manip_check1_{i+1}' for i in range(4)]
