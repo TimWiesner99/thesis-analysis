@@ -2584,7 +2584,9 @@ def plot_noninferiority_test(mean_diff,
                              category_order: Optional[List[str]] = None,
                              ci_lower_bounds=None,
                              ci_upper_bounds=None,
-                             p_values=None) -> plt.Axes:
+                             p_values=None,
+                             column_title_pos_shift: float = 0,
+                             height_scale: float = 1.0) -> plt.Axes:
     """
     Visualize non-inferiority test as a forest plot (blobbogram).
 
@@ -2756,7 +2758,7 @@ def plot_noninferiority_test(mean_diff,
     # Always use forest plot style sizing (uniform visualization)
     if ax is None:
         # Height scales with number of variables, minimum height of 8 for readability
-        fig_height = max(8, 2 + 1.5 * n_vars)
+        fig_height = max(8, 2 + 1.5 * n_vars) * height_scale
         fig, ax = plt.subplots(figsize=(10, fig_height))
 
     # Calculate statistics for all distributions
@@ -2937,7 +2939,7 @@ def plot_noninferiority_test(mean_diff,
 
     # Adjust figure size based on number of elements
     if ax.figure is not None:
-        new_height = max(8, 0.5 * n_elements + 2)  # Scale with total elements, min 8 for readability
+        new_height = max(8, 0.5 * n_elements + 2) * height_scale  # Scale with total elements, min 8 for readability
         ax.figure.set_size_inches(18, new_height)
 
     for i in range(n_elements):
@@ -3002,8 +3004,8 @@ def plot_noninferiority_test(mean_diff,
     plot_x_min = min(plot_x_min, 0, min(all_sesoi_pos)) - max(abs(s) for s in all_sesoi_pos) * 0.1
     plot_x_max = max(plot_x_max, 0, max(all_sesoi_pos)) + max(abs(s) for s in all_sesoi_pos) * 0.1
 
-    y_min = min(element_positions.values()) - 0.5
-    y_max = max(element_positions.values()) + 1.0  # Extra space for column headers
+    y_min = min(element_positions.values()) - 0.3
+    y_max = max(element_positions.values()) + 0.3
 
     # Mark zero with dotted line
     ax.axvline(0, color='gray', linestyle=':', linewidth=1.5, alpha=0.5, zorder=1)
@@ -3044,8 +3046,8 @@ def plot_noninferiority_test(mean_diff,
     from matplotlib.transforms import blended_transform_factory
     trans = blended_transform_factory(ax.transAxes, ax.transData)
 
-    # Position headers just above the topmost element (not at y_max which includes padding)
-    headers_y = max(element_positions.values()) + 0.4
+    # Position headers at top of figure (y_max), with optional shift
+    headers_y = y_max + column_title_pos_shift
     for stat_x, label in zip(stats_x_positions, stat_labels):
         ax.text(stat_x, headers_y, label, fontsize=STYLE_CONFIG['font_size'],
                weight='bold', ha='center', va='bottom', transform=trans)
