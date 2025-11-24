@@ -4,7 +4,11 @@
       "Bash(python:*)",
       "Bash(cat:*)",
       "Bash(uv run python:*)",
-      "Bash(NUL)"
+      "Bash(NUL)",
+      "Bash(findstr:*)",
+      "WebSearch",
+      "WebFetch(domain:stats.stackexchange.com)",
+      "WebFetch(domain:web.pdx.edu)"
     ],
     "deny": [],
     "ask": []

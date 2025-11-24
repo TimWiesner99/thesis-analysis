@@ -1,0 +1,7 @@
+Test,Effect Size,95% CI,Margin (MDE),p,Result
+MULTIVARIATE (Pillai's V),V = 0.0217,"[0.0000, 0.0494]",V = 0.0493,.358,Non-inferior
+TiA - Familiarity,B = 0.142,"[-0.075, 0.359]",Δ = 0.310,.199,Non-inferior
+TiA - Propensity to Trust,B = -0.054,"[-0.212, 0.104]",Δ = 0.225,.499,Non-inferior
+TiA - Reliability/Competence,B = -0.100,"[-0.228, 0.028]",Δ = 0.183,.124,Inconclusive
+TiA - Trust in Automation,B = -0.102,"[-0.279, 0.076]",Δ = 0.254,.262,Inconclusive
+TiA - Understanding/Predictability,B = -0.006,"[-0.187, 0.175]",Δ = 0.259,.947,Non-inferior

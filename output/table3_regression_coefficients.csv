@@ -1,0 +1,36 @@
+DV,Predictor,B,SE,t,p,95% CI,Sig.
+TiA - Familiarity,Intercept,2.182,0.055,39.92,< .001,"[2.074, 2.289]",***
+TiA - Familiarity,Condition (Uncertainty vs Control),0.142,0.110,1.29,.199,"[-0.075, 0.359]",
+TiA - Familiarity,Age,0.181,0.063,2.86,.005,"[0.057, 0.306]",**
+TiA - Familiarity,Education,0.072,0.040,1.77,.078,"[-0.008, 0.151]",
+TiA - Familiarity,AI Experience,0.062,0.059,1.05,.297,"[-0.055, 0.178]",
+TiA - Familiarity,Technology Affinity (ATI),0.220,0.057,3.89,< .001,"[0.109, 0.332]",***
+TiA - Familiarity,Healthcare Trust - Competence,-0.071,0.057,-1.26,.207,"[-0.183, 0.040]",
+TiA - Propensity to Trust,Intercept,2.736,0.040,68.87,< .001,"[2.658, 2.815]",***
+TiA - Propensity to Trust,Condition (Uncertainty vs Control),-0.054,0.080,-0.68,.499,"[-0.212, 0.104]",
+TiA - Propensity to Trust,Age,0.199,0.046,4.31,< .001,"[0.108, 0.289]",***
+TiA - Propensity to Trust,Education,-0.048,0.029,-1.64,.103,"[-0.106, 0.010]",
+TiA - Propensity to Trust,AI Experience,0.127,0.043,2.96,.003,"[0.043, 0.211]",**
+TiA - Propensity to Trust,Technology Affinity (ATI),-0.067,0.041,-1.63,.105,"[-0.148, 0.014]",
+TiA - Propensity to Trust,Healthcare Trust - Competence,0.098,0.041,2.38,.018,"[0.017, 0.179]",*
+TiA - Reliability/Competence,Intercept,3.259,0.032,101.08,< .001,"[3.196, 3.323]",***
+TiA - Reliability/Competence,Condition (Uncertainty vs Control),-0.100,0.065,-1.54,.124,"[-0.228, 0.028]",
+TiA - Reliability/Competence,Age,0.205,0.037,5.48,< .001,"[0.131, 0.279]",***
+TiA - Reliability/Competence,Education,0.018,0.024,0.75,.452,"[-0.029, 0.065]",
+TiA - Reliability/Competence,AI Experience,0.072,0.035,2.07,.040,"[0.003, 0.141]",*
+TiA - Reliability/Competence,Technology Affinity (ATI),-0.018,0.033,-0.53,.593,"[-0.084, 0.048]",
+TiA - Reliability/Competence,Healthcare Trust - Competence,0.142,0.033,4.27,< .001,"[0.077, 0.208]",***
+TiA - Trust in Automation,Intercept,3.357,0.045,74.99,< .001,"[3.269, 3.446]",***
+TiA - Trust in Automation,Condition (Uncertainty vs Control),-0.102,0.090,-1.13,.262,"[-0.279, 0.076]",
+TiA - Trust in Automation,Age,0.321,0.052,6.18,< .001,"[0.219, 0.424]",***
+TiA - Trust in Automation,Education,0.064,0.033,1.92,.056,"[-0.002, 0.129]",
+TiA - Trust in Automation,AI Experience,0.182,0.048,3.76,< .001,"[0.087, 0.277]",***
+TiA - Trust in Automation,Technology Affinity (ATI),-0.029,0.046,-0.63,.528,"[-0.121, 0.062]",
+TiA - Trust in Automation,Healthcare Trust - Competence,0.191,0.046,4.13,< .001,"[0.100, 0.282]",***
+TiA - Understanding/Predictability,Intercept,3.356,0.046,73.52,< .001,"[3.266, 3.445]",***
+TiA - Understanding/Predictability,Condition (Uncertainty vs Control),-0.006,0.092,-0.07,.947,"[-0.187, 0.175]",
+TiA - Understanding/Predictability,Age,0.064,0.053,1.21,.226,"[-0.040, 0.169]",
+TiA - Understanding/Predictability,Education,0.058,0.034,1.71,.089,"[-0.009, 0.124]",
+TiA - Understanding/Predictability,AI Experience,0.015,0.049,0.30,.766,"[-0.082, 0.112]",
+TiA - Understanding/Predictability,Technology Affinity (ATI),-0.121,0.047,-2.55,.011,"[-0.214, -0.028]",*
+TiA - Understanding/Predictability,Healthcare Trust - Competence,-0.035,0.047,-0.74,.463,"[-0.128, 0.058]",
