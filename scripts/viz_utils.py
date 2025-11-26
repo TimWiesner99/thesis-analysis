@@ -3036,7 +3036,7 @@ def plot_noninferiority_test(effect_size,
 
         # Add value label to the left of the line (at top of line)
         label_offset = (plot_x_max - plot_x_min) * 0.02  # Small offset to the left
-        ax.text(sesoi_pos - label_offset, y_pos + y_line_height/2, f'{abs(sesoi_pos):.2f}',
+        ax.text(sesoi_pos - label_offset, y_pos + y_line_height/2, f'{abs(sesoi_pos):.4f}',
                fontsize=STYLE_CONFIG['font_size'] - 2, color='#87CEEB',
                va='center', ha='right', alpha=0.8)
 
@@ -3084,8 +3084,8 @@ def plot_noninferiority_test(effect_size,
 
         # Draw statistics (μ, CI, p, Verdict)
         stat_values = [
-            f'{md:.2f}',
-            f'[{ci_lower:.2f}, {ci_upper:.2f}]',
+            f'{md:.4f}',
+            f'[{ci_lower:.4f}, {ci_upper:.4f}]',
             p_text,
             verdict_text
         ]
