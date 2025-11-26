@@ -17,6 +17,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 from typing import Optional, Tuple, List
+
+from numpy.f2py.auxfuncs import throw_error
 from scipy import stats
 from .utils import get_label_for_value, get_question_statement
 from .stats import (cohens_d, independent_t_test, chi_square_test, cramers_v,
@@ -2573,6 +2575,7 @@ def plot_noninferiority_test(effect_size,
                              se=None,
                              alpha: float = 0.05,
                              test_type: str = 'lower',
+                             mode : str = 'non-inferiority',
                              title: Optional[str] = None,
                              xlabel: Optional[str] = None,
                              ax: Optional[plt.Axes] = None,
@@ -2808,7 +2811,12 @@ def plot_noninferiority_test(effect_size,
 
         # Determine three-level verdict
         if non_inferior:
-            verdict = 'Non-inferior'
+            if mode == 'non-inferiority':
+                verdict = 'Non-inferior'
+            elif mode == 'equivalence':
+                verdict = 'Equal'
+            else:
+                raise ValueError(f"Unknown mode '{mode}'")
         elif ci_lower > 0 or ci_upper < 0:
             # Zero is outside the CI - effect is significantly different from zero
             verdict = 'Different'
@@ -3085,9 +3093,9 @@ def plot_noninferiority_test(effect_size,
         for stat_x, value, col_idx in zip(stats_x_positions, stat_values, range(4)):
             # Color code verdict column based on three-level verdict
             if col_idx == 3:  # Verdict column
-                if verdict_text == 'Non-inferior':
+                if non_inferior:
                     color = 'darkgreen'
-                elif verdict_text == 'Different':
+                elif ci_lower > 0 or ci_upper < 0:
                     color = 'darkblue'
                 else:  # Inconclusive
                     color = 'darkorange'
