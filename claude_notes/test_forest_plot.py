@@ -42,7 +42,7 @@ var_labels = {
 print("Test 1: Creating basic forest plot...")
 fig, ax = plt.subplots(figsize=(14, 6))
 plot_noninferiority_test(
-    mean_diff=mean_diffs,
+    effect_size=mean_diffs,
     sesoi=sesoi_values,
     se=se_values,
     alpha=0.05,
@@ -68,7 +68,7 @@ categories = {
 
 fig, ax = plt.subplots(figsize=(14, 8))
 plot_noninferiority_test(
-    mean_diff=mean_diffs,
+    effect_size=mean_diffs,
     sesoi=sesoi_values,
     se=se_values,
     alpha=0.05,
@@ -89,7 +89,7 @@ plt.close()
 print("\nTest 3: Testing backward compatibility with single variable...")
 fig, ax = plt.subplots(figsize=(10, 6))
 plot_noninferiority_test(
-    mean_diff=0.15,
+    effect_size=0.15,
     sesoi=0.20,
     se=0.10,
     alpha=0.05,

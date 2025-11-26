@@ -14,7 +14,7 @@ from scripts.viz_utils import plot_noninferiority_test
 print("Example 1: Non-inferiority established (lower test)")
 fig, ax = plt.subplots(figsize=(10, 6))
 plot_noninferiority_test(
-    mean_diff=0.15,
+    effect_size=0.15,
     sesoi=0.3,
     se=0.12,
     alpha=0.05,
@@ -33,7 +33,7 @@ plt.close()
 print("Example 2: Non-inferiority NOT established (lower test)")
 fig, ax = plt.subplots(figsize=(10, 6))
 plot_noninferiority_test(
-    mean_diff=-0.25,
+    effect_size=-0.25,
     sesoi=0.3,
     se=0.15,
     alpha=0.05,
@@ -52,7 +52,7 @@ plt.close()
 print("Example 3: Upper non-inferiority test")
 fig, ax = plt.subplots(figsize=(10, 6))
 plot_noninferiority_test(
-    mean_diff=-0.10,
+    effect_size=-0.10,
     sesoi=0.3,
     se=0.12,
     alpha=0.05,
@@ -71,7 +71,7 @@ plt.close()
 print("Example 4: Strict non-inferiority margin")
 fig, ax = plt.subplots(figsize=(10, 6))
 plot_noninferiority_test(
-    mean_diff=0.08,
+    effect_size=0.08,
     sesoi=0.15,
     se=0.08,
     alpha=0.05,
@@ -91,7 +91,7 @@ fig, axes = plt.subplots(2, 2, figsize=(16, 12))
 
 # Scenario A: Strong non-inferiority
 plot_noninferiority_test(
-    mean_diff=0.25, sesoi=0.3, se=0.10, alpha=0.05,
+    effect_size=0.25, sesoi=0.3, se=0.10, alpha=0.05,
     test_type='lower',
     title='A: Strong Non-Inferiority',
     xlabel='Effect Size',
@@ -100,7 +100,7 @@ plot_noninferiority_test(
 
 # Scenario B: Marginal non-inferiority
 plot_noninferiority_test(
-    mean_diff=-0.05, sesoi=0.3, se=0.15, alpha=0.05,
+    effect_size=-0.05, sesoi=0.3, se=0.15, alpha=0.05,
     test_type='lower',
     title='B: Marginal Non-Inferiority',
     xlabel='Effect Size',
@@ -109,7 +109,7 @@ plot_noninferiority_test(
 
 # Scenario C: Failed non-inferiority
 plot_noninferiority_test(
-    mean_diff=-0.35, sesoi=0.3, se=0.12, alpha=0.05,
+    effect_size=-0.35, sesoi=0.3, se=0.12, alpha=0.05,
     test_type='lower',
     title='C: Failed Non-Inferiority',
     xlabel='Effect Size',
@@ -118,7 +118,7 @@ plot_noninferiority_test(
 
 # Scenario D: Upper non-inferiority
 plot_noninferiority_test(
-    mean_diff=0.05, sesoi=0.3, se=0.12, alpha=0.05,
+    effect_size=0.05, sesoi=0.3, se=0.12, alpha=0.05,
     test_type='upper',
     title='D: Upper Non-Inferiority',
     xlabel='Effect Size',
@@ -137,7 +137,7 @@ fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 alphas = [0.01, 0.05, 0.10]
 for idx, alpha in enumerate(alphas):
     plot_noninferiority_test(
-        mean_diff=0.10,
+        effect_size=0.10,
         sesoi=0.3,
         se=0.12,
         alpha=alpha,

@@ -2568,7 +2568,7 @@ def _print_noninferiority_report(variable_name: str,
     print()  # Blank line separator
 
 
-def plot_noninferiority_test(mean_diff,
+def plot_noninferiority_test(effect_size,
                              sesoi,
                              se=None,
                              alpha: float = 0.05,
@@ -2605,7 +2605,7 @@ def plot_noninferiority_test(mean_diff,
     confidence bound (alpha-percentile) is greater than the SESOI margin.
 
     Args:
-        mean_diff: Observed mean difference(s). Float for single, List[float] for multiple
+        effect_size: Observed effect size(s), e.g. mean difference(s). Float for single, List[float] for multiple
         sesoi: SESOI margin(s) - positive value(s). Float for single, List[float] for multiple
         se: Standard error(s) of mean difference. Float for single, List[float] for multiple.
             Optional if ci_lower_bounds and ci_upper_bounds are provided.
@@ -2641,11 +2641,11 @@ def plot_noninferiority_test(mean_diff,
 
     Example:
         >>> # Single variable
-        >>> plot_noninferiority_test(mean_diff=0.15, sesoi=0.3, se=0.12, alpha=0.05)
+        >>> plot_noninferiority_test(effect_size=0.15, sesoi=0.3, se=0.12, alpha=0.05)
 
         >>> # Multiple variables (forest plot)
         >>> plot_noninferiority_test(
-        ...     mean_diff=[0.15, -0.03, -0.10],
+        ...     effect_size=[0.15, -0.03, -0.10],
         ...     sesoi=[0.15, 0.11, 0.09],
         ...     se=[0.11, 0.08, 0.07],
         ...     variable_names=['tia_f', 'tia_pro', 'tia_rc'],
@@ -2655,7 +2655,7 @@ def plot_noninferiority_test(mean_diff,
 
         >>> # With pre-computed CI bounds (for non-normal distributions)
         >>> plot_noninferiority_test(
-        ...     mean_diff=0.02,
+        ...     effect_size=0.02,
         ...     sesoi=0.05,
         ...     ci_lower_bounds=0.0,
         ...     ci_upper_bounds=0.06,
@@ -2666,7 +2666,7 @@ def plot_noninferiority_test(mean_diff,
 
         >>> # With categorical grouping
         >>> plot_noninferiority_test(
-        ...     mean_diff=[0.15, -0.03, -0.10, 0.05],
+        ...     effect_size=[0.15, -0.03, -0.10, 0.05],
         ...     sesoi=[0.15, 0.11, 0.09, 0.12],
         ...     se=[0.11, 0.08, 0.07, 0.09],
         ...     variable_names=['tia_t', 'tia_rc', 'tia_up', 'tia_f'],
@@ -2683,14 +2683,14 @@ def plot_noninferiority_test(mean_diff,
         - When using pre-computed CIs, ensure they match the alpha level specified
     """
     # Detect mode (single vs multiple)
-    is_multiple = hasattr(mean_diff, '__iter__') and not isinstance(mean_diff, str)
+    is_multiple = hasattr(effect_size, '__iter__') and not isinstance(effect_size, str)
 
     # Check if pre-computed CIs are provided
     has_precomputed_ci = ci_lower_bounds is not None and ci_upper_bounds is not None
 
     # Convert to lists for unified processing
     if is_multiple:
-        mean_diff_list = list(mean_diff)
+        mean_diff_list = list(effect_size)
         sesoi_list = list(sesoi) if hasattr(sesoi, '__iter__') else [sesoi] * len(mean_diff_list)
 
         # Handle SE (optional when pre-computed CIs are provided)
@@ -2722,7 +2722,7 @@ def plot_noninferiority_test(mean_diff,
             raise ValueError(f"variable_names must have length {n_vars}")
     else:
         # Single mode: wrap in lists for unified processing
-        mean_diff_list = [mean_diff]
+        mean_diff_list = [effect_size]
         sesoi_list = [sesoi]
         se_list = [se] if se is not None else [None]
         ci_lower_list = [ci_lower_bounds] if ci_lower_bounds is not None else [None]

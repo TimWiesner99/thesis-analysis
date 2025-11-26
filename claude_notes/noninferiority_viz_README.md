@@ -62,9 +62,9 @@ import matplotlib.pyplot as plt
 
 # Lower non-inferiority test
 plot_noninferiority_test(
-    mean_diff=0.15,    # Observed difference
-    sesoi=0.3,         # Margin (positive value)
-    se=0.12,           # Standard error
+    effect_size=0.15,  # Observed difference
+    sesoi=0.3,  # Margin (positive value)
+    se=0.12,  # Standard error
     alpha=0.05
 )
 plt.show()
@@ -231,7 +231,7 @@ from scripts.viz_utils import (
 
 # After running your statistical tests
 plot_noninferiority_test(
-    mean_diff=your_cohens_d,
+    effect_size=your_cohens_d,
     sesoi=0.3,  # Your chosen margin
     se=your_standard_error,
     title='Non-Inferiority: Trust in Automation'

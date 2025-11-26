@@ -25,7 +25,7 @@ fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
 # Test 1: Non-inferiority established (mean_diff > -sesoi)
 plot_noninferiority_test(
-    mean_diff=0.15,
+    effect_size=0.15,
     sesoi=0.3,
     se=0.12,
     alpha=0.05,
@@ -36,7 +36,7 @@ plot_noninferiority_test(
 
 # Test 2: Non-inferiority NOT established (mean_diff < -sesoi)
 plot_noninferiority_test(
-    mean_diff=-0.35,
+    effect_size=-0.35,
     sesoi=0.3,
     se=0.12,
     alpha=0.05,
@@ -47,7 +47,7 @@ plot_noninferiority_test(
 
 # Test 3: Mean difference right at the SESOI boundary
 plot_noninferiority_test(
-    mean_diff=-0.3,
+    effect_size=-0.3,
     sesoi=0.3,
     se=0.12,
     alpha=0.05,
@@ -58,7 +58,7 @@ plot_noninferiority_test(
 
 # Test 4: Different alpha level (0.01)
 plot_noninferiority_test(
-    mean_diff=0.15,
+    effect_size=0.15,
     sesoi=0.3,
     se=0.12,
     alpha=0.01,
