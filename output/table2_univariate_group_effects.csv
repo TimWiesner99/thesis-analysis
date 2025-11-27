@@ -1,6 +1,0 @@
-Dependent Variable,B,SE,t,p,95% CI,R²,Adj. R²,Sig.
-TiA - Familiarity,0.142,0.110,1.29,.199,"[-0.075, 0.359]",0.119,0.097,
-TiA - Propensity to Trust,-0.054,0.080,-0.68,.499,"[-0.212, 0.104]",0.098,0.076,
-TiA - Reliability/Competence,-0.100,0.065,-1.54,.124,"[-0.228, 0.028]",0.169,0.148,
-TiA - Trust in Automation,-0.102,0.090,-1.13,.262,"[-0.279, 0.076]",0.205,0.186,
-TiA - Understanding/Predictability,-0.006,0.092,-0.07,.947,"[-0.187, 0.175]",0.041,0.018,

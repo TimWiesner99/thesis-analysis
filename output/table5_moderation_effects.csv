@@ -1,7 +1,0 @@
-Interaction,Pillai's V,F,df1,df2,p,Sig.
-Condition × Age,0.0217,1.049,5,236,.390,
-Condition × Education,0.0216,1.040,5,236,.395,
-Condition × Gender,0.0165,0.793,5,236,.556,
-Condition × Technology Affinity,0.0044,0.207,5,236,.959,
-Condition × HC Trust (Competence),0.0297,1.447,5,236,.208,
-Condition × HC Trust (Values),0.0247,1.198,5,236,.311,

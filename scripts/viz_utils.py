@@ -3047,8 +3047,12 @@ def plot_noninferiority_test(effect_size,
 
     # Add statistics columns on the right side (using axis transform coordinates)
     # This positions them outside the plot area
-    stats_x_positions = [1.10, 1.30, 1.45, 1.63]  # Relative to axis (0-1 scale), more spread out
-    stat_labels = ['μ', 'CI', 'p', 'Verdict']
+    stats_x_positions = [1.05, 1.20, 1.35, 1.45]  # Relative to axis (0-1 scale), more spread out
+
+    if se is None:
+        stat_labels = ['point est.', 'CI', 'p', 'Verdict']
+    else:
+        stat_labels = ['μ', 'CI', 'p', 'Verdict']
 
     # Column headers (using axis transform: x is relative 0-1, y is data coordinates)
     from matplotlib.transforms import blended_transform_factory
