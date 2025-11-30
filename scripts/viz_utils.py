@@ -2804,10 +2804,10 @@ def plot_noninferiority_test(effect_size,
             z_score = None
 
         # Determine non-inferiority based on CI bounds
-        if (mode == 'non-inferiority' and test_type == 'lower') or mode == 'equivalence':
-            non_inferior = ci_lower > sesoi_position
+        if test_type == 'lower':
+            non_inferior = ci_lower >= sesoi_position
         else:
-            non_inferior = ci_upper < sesoi_position
+            non_inferior = ci_upper <= sesoi_position
 
 
         # Determine three-level verdict
@@ -3098,9 +3098,9 @@ def plot_noninferiority_test(effect_size,
         for stat_x, value, col_idx in zip(stats_x_positions, stat_values, range(4)):
             # Color code verdict column based on three-level verdict
             if col_idx == 3:  # Verdict column
-                if non_inferior:
+                if verdict_text in ['Non-inferior', 'Equal']:
                     color = 'darkgreen'
-                elif ci_lower > 0 or ci_upper < 0:
+                elif verdict_text == 'Different':
                     color = 'darkblue'
                 else:  # Inconclusive
                     color = 'darkorange'
