@@ -2588,6 +2588,7 @@ def plot_noninferiority_test(effect_size,
                              ci_lower_bounds=None,
                              ci_upper_bounds=None,
                              p_values=None,
+                             estimate_name = 'μ',
                              column_title_pos_shift: float = 0,
                              height_scale: float = 1.0) -> plt.Axes:
     """
@@ -2684,6 +2685,7 @@ def plot_noninferiority_test(effect_size,
         - The SESOI (margin) should always be provided as a positive value
         - Statistics are shown both in the plot and printed to console
         - When using pre-computed CIs, ensure they match the alpha level specified
+        :param estimate_name:
     """
     # Detect mode (single vs multiple)
     is_multiple = hasattr(effect_size, '__iter__') and not isinstance(effect_size, str)
@@ -2859,6 +2861,9 @@ def plot_noninferiority_test(effect_size,
                 test_type=test_type
             )
 
+    # Check if all p-values are missing (None)
+    all_p_values_missing = all(s['p_value'] is None for s in stats_data)
+
     # Handle categories: organize variables and create display order
     display_order = []  # List of (var_index, category_name, is_first_in_category)
     var_to_category = {}  # Maps var_idx to category name
@@ -2967,9 +2972,9 @@ def plot_noninferiority_test(effect_size,
         if elem_type == 'category':
             # Render category header only (no plot elements)
             cat_name = elem_data
-            ax.text(-0.02, y_pos, cat_name, transform=ax.get_yaxis_transform(),
+            ax.text(-0.25, y_pos, cat_name, transform=ax.get_yaxis_transform(),
                    fontsize=STYLE_CONFIG['font_size'] + 1, weight='bold',
-                   va='center', ha='right')
+                   va='center', ha='left')
 
         elif elem_type == 'variable':
             # Render everything for this variable
@@ -3048,12 +3053,13 @@ def plot_noninferiority_test(effect_size,
 
     # Add statistics columns on the right side (using axis transform coordinates)
     # This positions them outside the plot area
-    stats_x_positions = [1.05, 1.20, 1.35, 1.45]  # Relative to axis (0-1 scale), more spread out
-
-    if se is None:
-        stat_labels = ['point est.', 'CI', 'p', 'Verdict']
+    # Conditionally exclude p-value column if all p-values are missing
+    if all_p_values_missing:
+        stats_x_positions = [1.05, 1.20, 1.35]  # Relative to axis (0-1 scale), more spread out
+        stat_labels = [estimate_name, 'CI', 'Verdict']
     else:
-        stat_labels = ['μ', 'CI', 'p', 'Verdict']
+        stats_x_positions = [1.05, 1.20, 1.35, 1.45]  # Relative to axis (0-1 scale), more spread out
+        stat_labels = [estimate_name, 'CI', 'p', 'Verdict']
 
     # Column headers (using axis transform: x is relative 0-1, y is data coordinates)
     from matplotlib.transforms import blended_transform_factory
@@ -3088,16 +3094,27 @@ def plot_noninferiority_test(effect_size,
             p_text = f"{p_value:.3f}".replace("0.", ".")
 
         # Draw statistics (μ, CI, p, Verdict)
-        stat_values = [
-            f'{md:.4f}',
-            f'[{ci_lower:.4f}, {ci_upper:.4f}]',
-            p_text,
-            verdict_text
-        ]
+        # Conditionally exclude p_text if all p-values are missing
+        if all_p_values_missing:
+            stat_values = [
+                f'{md:.4f}',
+                f'[{ci_lower:.4f}, {ci_upper:.4f}]',
+                verdict_text
+            ]
+        else:
+            stat_values = [
+                f'{md:.4f}',
+                f'[{ci_lower:.4f}, {ci_upper:.4f}]',
+                p_text,
+                verdict_text
+            ]
 
-        for stat_x, value, col_idx in zip(stats_x_positions, stat_values, range(4)):
+        # Determine verdict column index based on whether p-values are included
+        verdict_col_idx = 2 if all_p_values_missing else 3
+
+        for stat_x, value, col_idx in zip(stats_x_positions, stat_values, range(len(stat_values))):
             # Color code verdict column based on three-level verdict
-            if col_idx == 3:  # Verdict column
+            if col_idx == verdict_col_idx:  # Verdict column
                 if verdict_text in ['Non-inferior', 'Equal']:
                     color = 'darkgreen'
                 elif verdict_text == 'Different':
@@ -3119,7 +3136,7 @@ def plot_noninferiority_test(effect_size,
     from matplotlib.lines import Line2D
     legend_elements = [Line2D([0], [0], color='#87CEEB', linestyle='-',
                              linewidth=2.5, alpha=0.6, label='Non-inferiority margin')]
-    ax.legend(handles=legend_elements, loc='upper left', frameon=True,
+    ax.legend(handles=legend_elements, loc='lower right', frameon=True,
              fontsize=STYLE_CONFIG['font_size'] - 1, fancybox=True, shadow=False)
 
     # Set labels
