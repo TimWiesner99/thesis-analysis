@@ -1,13 +1,14 @@
-"""Utility functions for data processing."""
+"""Utility functions for data processing and output generation."""
 
 import pandas as pd
+from scipy import stats
+from scipy.optimize import brentq
 
 # Load labels and questions once when module is imported
 LABELS_PATH = "../data/labels.csv"
 QUESTIONS_PATH = "../data/questions.csv"
 labels = pd.read_csv(LABELS_PATH)
 questions = pd.read_csv(QUESTIONS_PATH)
-
 
 def get_value_for_label(item_name: str, label_text: str) -> int:
     """
@@ -99,4 +100,34 @@ def get_question_statement(item_name: str) -> str:
 
     return question_text
 
+def apa_p(p, sig_stars=False):
+    """
+    Format p-value in APA style (no leading zero).
 
+    Args:
+        sig_stars: Returns significance value with '*' stars as per APA formatting conventions.
+
+    Returns:
+        The formatted p-value.
+
+    """
+    def apa_sig(p):
+        """Return significance stars."""
+        if p < 0.001:
+            return "***"
+        elif p < 0.01:
+            return "**"
+        elif p < 0.05:
+            return "*"
+        else:
+            return ""
+
+    if p < 0.001:
+        output =  "< .001"
+    else:
+        output =  f"{p:.3f}".replace("0.", ".")
+
+    if sig_stars:
+        output += ' ' + apa_sig(p)
+
+    return output

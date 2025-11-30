@@ -2804,10 +2804,11 @@ def plot_noninferiority_test(effect_size,
             z_score = None
 
         # Determine non-inferiority based on CI bounds
-        if test_type == 'lower':
+        if (mode == 'non-inferiority' and test_type == 'lower') or mode == 'equivalence':
             non_inferior = ci_lower > sesoi_position
         else:
             non_inferior = ci_upper < sesoi_position
+
 
         # Determine three-level verdict
         if non_inferior:
