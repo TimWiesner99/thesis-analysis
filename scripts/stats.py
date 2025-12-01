@@ -2,11 +2,97 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 from scipy import stats
+from scipy.optimize import brentq
 import statsmodels.formula.api as smf
-import statsmodels.api as sm
-from statsmodels.stats.multitest import multipletests
-from pathlib import Path
-import warnings
+
+def eta_confidence_interval(F_obs, df1, df2, df_error=None, alpha=0.05):
+    """
+    Calculate confidence interval for partial eta squared using non-central F inversion.
+
+    The method finds non-centrality parameter (lambda) bounds such that F_obs
+    falls at the appropriate quantiles of the non-central F distribution,
+    then converts these to partial eta squared bounds.
+
+    Parameters:
+    -----------
+    F_obs : float
+        Observed F-value (for univariate regression: t²; for MANOVA: F from Pillai's V)
+    df1 : int
+        Numerator degrees of freedom
+        - Univariate regression: 1
+        - MANOVA: p (number of dependent variables)
+    df2 : int
+        Denominator degrees of freedom for F distribution
+        - Univariate regression: df_resid
+        - MANOVA: n - p - 1
+    df_error : int, optional
+        Degrees of freedom for lambda → eta² conversion
+        - Univariate regression: df_resid (same as df2)
+        - MANOVA: n - k (where k = number of groups)
+        If None, defaults to df2
+    alpha : float
+        Significance level for CI (default 0.05 for 95% CI)
+
+    Returns:
+    --------
+    dict with CI bounds for partial eta squared and related statistics
+
+    References:
+    -----------
+    Steiger, J. H. (2004). Beyond the F test: Effect size confidence intervals
+        and tests of close fit in the analysis of variance and contrast analysis.
+        Psychological Methods, 9(2), 164-182.
+    """
+
+    # If df_error not specified, use df2 (correct for univariate case)
+    if df_error is None:
+        df_error = df2
+
+    # Check if we can establish a lower bound > 0
+    # SF at lambda=0 tells us if F_obs is in the upper tail of central F
+    sf_at_zero = stats.f.sf(F_obs, df1, df2)
+
+    # Lower bound for ncp: find ncp where SF(F_obs) = α/2
+    def lower_func(lambda_nc):
+        return stats.ncf.sf(F_obs, df1, df2, lambda_nc) - alpha / 2
+
+    lambda_lower = 0
+    if sf_at_zero < alpha / 2:
+        # F_obs is large enough that even at ncp=0, it's in the upper tail
+        # We can find a positive lower bound
+        try:
+            lambda_lower = brentq(lower_func, 0, 500)
+        except ValueError:
+            lambda_lower = 0
+
+    # Upper bound for ncp: find ncp where SF(F_obs) = 1 - α/2
+    def upper_func(lambda_nc):
+        return stats.ncf.sf(F_obs, df1, df2, lambda_nc) - (1 - alpha / 2)
+
+    try:
+        lambda_upper = brentq(upper_func, 0.001, 1000)
+    except ValueError:
+        try:
+            lambda_upper = brentq(upper_func, 0.0001, 5000)
+        except ValueError:
+            lambda_upper = float('inf')
+
+    # Convert ncp bounds to eta_squared bounds
+    # eta² = lambda / (df_error + lambda)
+    eta_sq_lower = lambda_lower / (df_error + lambda_lower) if lambda_lower > 0 else 0
+    eta_sq_upper = lambda_upper / (df_error + lambda_upper) if lambda_upper < float('inf') else 1
+
+    return {
+        'F_obs': F_obs,
+        'eta_sq_lower': eta_sq_lower,
+        'eta_sq_upper': eta_sq_upper,
+        'lambda_lower': lambda_lower,
+        'lambda_upper': lambda_upper,
+        'df1': df1,
+        'df2': df2,
+        'df_error': df_error,
+        'p_value': sf_at_zero
+    }
 
 def test_moderation(df, independent, dependent, moderator_centered, categorical=False, name: Optional[str]=None):
     """
