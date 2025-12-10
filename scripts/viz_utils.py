@@ -2119,7 +2119,7 @@ def plot_split_histogram_boxplot(data: pd.DataFrame,
             _print_statistical_report('mann-whitney', column, group_stats, test_stats)
 
             # Add text box with rank-biserial correlation (r) and p-value
-            textstr = f"r = {effect_size:.3f}\n{_format_p_value(p_value)}"
+            textstr = f"U = {u_stat:.1f}\n{_format_p_value(p_value)}"
         else:
             # Parametric: t-test and Cohen's d
             effect_size = cohens_d(group1_data, group2_data)
