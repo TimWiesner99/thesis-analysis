@@ -1,4 +1,4 @@
-ResponseId,UserLanguage,gender,age,education,Q19,manip_check1_1,manip_check1_2,manip_check1_3,manip_check1_4,manip_check2,stimulus_group,page_submit,ati,hcsds_c,hcsds_v,tia_f,tia_pro,tia_rc,tia_t,tia_up
+ResponseId,UserLanguage,gender,age,education,ai_exp,manip_check1_1,manip_check1_2,manip_check1_3,manip_check1_4,manip_check2,stimulus_group,page_submit,ati,hcsds_c,hcsds_v,tia_f,tia_pro,tia_rc,tia_t,tia_up
 R_2wcQZNoEgb828YN,NL,2,24,6,4,2,4,3,2,90,1,41.777,3.7777777777777777,3.25,2.4,2.5,2.0,3.0,4.0,3.0
 R_2xVbwQvHkSdNB3X,EN-GB,1,24,6,5,2,4,4,3,Between 82 and 98%,1,68.266,4.444444444444445,4.0,2.8,1.0,2.3333333333333335,2.5,3.0,2.6666666666666665
 R_8IgEAe8wOZIeQih,DE,2,22,6,3,2,4,4,2,90%,0,40.024,2.0,3.75,3.4,2.5,2.6666666666666665,2.6666666666666665,2.0,2.0
