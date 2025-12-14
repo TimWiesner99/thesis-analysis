@@ -1,0 +1,16 @@
+,Multivariate Effect (eta_sq),Familiarity (b),Propensity to Trust (b),Reliability/Competence (b),Understanding/Predictability (b),Trust in Automation (b)
+Group Effect (Uncertainty vs Control),0.020,0.175,-0.040,-0.096,-0.034,-0.101
+Age,0.186***,0.177*,0.192***,0.202***,0.063,0.317***
+Gender,0.014,-0.064,0.072,0.040,0.152,0.145
+Education,0.071*,0.067,-0.045,0.020,0.060,0.061
+AI Experience,0.072*,0.067,0.118*,0.067,0.010,0.168**
+Healthcare Trust - Competence,0.061*,-0.085,0.014,0.097,-0.057,0.108
+Healthcare Trust - Values,0.032,0.049,0.124,0.060,0.006,0.081
+Affinity for Technology,0.091**,0.244***,-0.070,-0.021,-0.150*,-0.053
+Group x Age,0.054,-0.061,0.130,-0.022,-0.234,-0.144
+Group x Gender,0.015,0.258,0.208,0.084,-0.160,0.120
+Group x Education,0.020,0.065,0.050,0.060,0.020,0.130
+Group x AI Experience,0.057,-0.087,0.195,0.022,-0.148,-0.045
+Group x Healthcare Trust - Competence,0.030,-0.292,-0.114,-0.011,0.007,0.113
+Group x Healthcare Trust - Values,0.025,0.246,0.014,-0.082,0.036,-0.092
+Group x Affinity for Technology,0.013,0.048,-0.113,-0.029,0.039,0.006
