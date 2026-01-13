@@ -2761,7 +2761,9 @@ def plot_noninferiority_test(effect_size,
 
     # Create figure if needed (will adjust height after category processing)
     # Always use forest plot style sizing (uniform visualization)
+    created_new_figure = False
     if ax is None:
+        created_new_figure = True
         # Height scales with number of variables, minimum height of 8 for readability
         fig_height = max(8, 2 + 1.5 * n_vars) * height_scale
         fig, ax = plt.subplots(figsize=(10, fig_height))
@@ -2951,8 +2953,8 @@ def plot_noninferiority_test(effect_size,
     # First element (index 0) should be at TOP, last element at bottom
     n_elements = len(elements)
 
-    # Adjust figure size based on number of elements
-    if ax.figure is not None:
+    # Adjust figure size based on number of elements (only if we created the figure)
+    if created_new_figure:
         new_height = max(8, 0.5 * n_elements + 2) * height_scale  # Scale with total elements, min 8 for readability
         ax.figure.set_size_inches(18, new_height)
 
@@ -3038,12 +3040,12 @@ def plot_noninferiority_test(effect_size,
         y_line_height = unit_spacing * 0.3
         label = 'Non-inferiority margin' if not first_margin_plotted else None
         ax.plot([sesoi_pos, sesoi_pos], [y_pos - y_line_height/2, y_pos + y_line_height/2],
-               color='#87CEEB', linestyle='-', linewidth=2.5, alpha=0.6, zorder=1, label=label)
+               color='#00008B', linestyle='-', linewidth=2.5, alpha=0.6, zorder=1, label=label)
 
         # Add value label to the left of the line (at top of line)
         label_offset = (plot_x_max - plot_x_min) * 0.02  # Small offset to the left
         ax.text(sesoi_pos - label_offset, y_pos + y_line_height/2, f'{abs(sesoi_pos):.4f}',
-               fontsize=STYLE_CONFIG['font_size'] - 2, color='#87CEEB',
+               fontsize=STYLE_CONFIG['font_size'] - 2, color='#00008B',
                va='center', ha='right', alpha=0.8)
 
         first_margin_plotted = True
@@ -3134,7 +3136,7 @@ def plot_noninferiority_test(effect_size,
 
     # Add legend for non-inferiority margin
     from matplotlib.lines import Line2D
-    legend_elements = [Line2D([0], [0], color='#87CEEB', linestyle='-',
+    legend_elements = [Line2D([0], [0], color='#00008B', linestyle='-',
                              linewidth=2.5, alpha=0.6, label='Non-inferiority margin')]
     ax.legend(handles=legend_elements, loc='lower right', frameon=True,
              fontsize=STYLE_CONFIG['font_size'] - 1, fancybox=True, shadow=False)
