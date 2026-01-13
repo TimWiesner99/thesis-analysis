@@ -3000,7 +3000,7 @@ def plot_noninferiority_test(effect_size,
             var_name = variable_names[var_idx]
             var_label = variable_labels.get(var_name, var_name) if variable_labels else var_name
             ax.text(-0.02, y_pos, var_label, transform=ax.get_yaxis_transform(),
-                   fontsize=STYLE_CONFIG['font_size'], va='center', ha='right')
+                   fontsize=STYLE_CONFIG['font_size'] + 2, va='center', ha='right')
 
     # Calculate proper x-axis limits for plot area (excluding statistics)
     # Find max CI upper bound and all SESOI positions across all variables
@@ -3052,6 +3052,22 @@ def plot_noninferiority_test(effect_size,
 
     # Set x-axis limits for plot area only (statistics will be outside)
     ax.set_xlim(plot_x_min, plot_x_max)
+
+    # Adjust subplot layout to reserve space for statistics columns
+    # This prevents tight_layout() from adding excessive whitespace on the right
+    # Calculate space needed for statistics columns
+    # Stats are positioned at 1.05, 1.20, 1.35, (1.45 if p-values present)
+    # This means they extend ~45% beyond the axes right edge at x=1.0
+    if all_p_values_missing:
+        # 3 columns (estimate, CI, verdict) - need less space
+        right_margin = 0.28
+    else:
+        # 4 columns (estimate, CI, p, verdict) - need more space
+        right_margin = 0.32
+
+    # Adjust subplot: shrink axes to leave room for statistics on right
+    # left=0.15 leaves room for variable labels, right=(1-margin) for statistics
+    plt.subplots_adjust(left=0.15, right=(1.0 - right_margin), top=0.92, bottom=0.08)
 
     # Add statistics columns on the right side (using axis transform coordinates)
     # This positions them outside the plot area
