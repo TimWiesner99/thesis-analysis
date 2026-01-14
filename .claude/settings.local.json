@@ -8,7 +8,8 @@
       "Bash(findstr:*)",
       "WebSearch",
       "WebFetch(domain:stats.stackexchange.com)",
-      "WebFetch(domain:web.pdx.edu)"
+      "WebFetch(domain:web.pdx.edu)",
+      "Bash(dir output*vif* output*normality*)"
     ],
     "deny": [],
     "ask": []
