@@ -9,7 +9,9 @@
       "WebSearch",
       "WebFetch(domain:stats.stackexchange.com)",
       "WebFetch(domain:web.pdx.edu)",
-      "Bash(dir output*vif* output*normality*)"
+      "Bash(dir output*vif* output*normality*)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\tim20\\\\Software Projects\\\\trust-medical-AI\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)"
     ],
     "deny": [],
     "ask": []
