@@ -1,5 +1,5 @@
 [project]
-name = "thesis-analysis"
+name = "trust-medical-AI"
 version = "0.1.0"
 description = "Python project to analyze results of Master Thesis research project."
 readme = "README.md"
