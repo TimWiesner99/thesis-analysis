@@ -1,0 +1,16 @@
+,Familiarity (b),Propensity to Trust (b),Reliability/Competence (b),Understanding/Predictability (b),Trust in Automation (b)
+Group Effect (Uncertainty vs Control),0.161,-0.024,-0.072,-0.064,-0.094
+Age,0.213,0.255***,0.223***,0.032,0.379***
+Gender,-0.044,0.043,0.019,0.184,0.133
+Education,0.075,-0.046,0.003,0.057,0.043
+AI Experience,0.058,0.118*,0.069,0.007,0.167**
+Healthcare Trust - Competence,-0.082,0.038,0.106,-0.076,0.119
+Healthcare Trust - Values,0.038,0.106,0.064,0.030,0.087
+Affinity for Technology,0.237***,-0.072,-0.018,-0.151*,-0.052
+Group x Age,-0.107,0.132,0.048,-0.323,-0.133
+Group x Gender,0.268,0.268,0.069,-0.105,0.117
+Group x Education,0.079,0.067,0.051,0.015,0.125
+Group x AI Experience,-0.088,0.184,0.012,-0.134,-0.054
+Group x Healthcare Trust - Competence,-0.270,-0.121,-0.013,-0.006,0.108
+Group x Healthcare Trust - Values,0.219,0.006,-0.059,0.053,-0.060
+Group x Affinity for Technology,0.030,-0.143,-0.017,0.051,0.013

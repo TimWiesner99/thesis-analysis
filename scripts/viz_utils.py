@@ -3175,6 +3175,284 @@ def plot_noninferiority_test(effect_size,
 
 
 # ============================================================================
+# COEFFICIENT COMPARISON FUNCTIONS
+# ============================================================================
+
+def format_stars_from_pval(p_adj: float) -> str:
+    """
+    Convert adjusted p-value to significance stars.
+
+    Parameters:
+        p_adj: Adjusted p-value
+
+    Returns:
+        str: Significance stars ('***', '**', '*', or '')
+    """
+    if p_adj < 0.001:
+        return '***'
+    elif p_adj < 0.01:
+        return '**'
+    elif p_adj < 0.05:
+        return '*'
+    else:
+        return ''
+
+
+def load_regression_comparison_data(full_data_path: str,
+                                    young_data_path: str,
+                                    tia_scales: list) -> dict:
+    """
+    Load and structure regression data from both full and young samples.
+
+    Parameters:
+        full_data_path: Directory containing full sample CSV files (e.g., '../output/')
+        young_data_path: Directory containing young sample CSV files (e.g., '../output/age/')
+        tia_scales: List of subscale names ['tia_f', 'tia_pro', 'tia_rc', 'tia_up', 'tia_t']
+
+    Returns:
+        dict: Nested dictionary structure with data for both samples per subscale
+              {
+                  'tia_f': {
+                      'full': {'coef': [...], 'ci_lower': [...], 'ci_upper': [...], 'p_adj': [...], 'effects': [...]},
+                      'young': {'coef': [...], 'ci_lower': [...], 'ci_upper': [...], 'p_adj': [...], 'effects': [...]}
+                  },
+                  ...
+              }
+    """
+    import pandas as pd
+    import os
+
+    data = {}
+
+    for subscale in tia_scales:
+        # Construct file paths
+        full_path = os.path.join(full_data_path, f'{subscale}_regression_coef.csv')
+        young_path = os.path.join(young_data_path, f'{subscale}_regression_coef_YOUNG.csv')
+
+        # Load CSV files
+        df_full = pd.read_csv(full_path, index_col=0)
+        df_young = pd.read_csv(young_path, index_col=0)
+
+        # Remove Intercept row (no p_adj value)
+        df_full = df_full[df_full.index != 'Intercept']
+        df_young = df_young[df_young.index != 'Intercept']
+
+        # Extract data
+        data[subscale] = {
+            'full': {
+                'coef': df_full['coef'].values.tolist(),
+                'ci_lower': df_full['CI_lower'].values.tolist(),
+                'ci_upper': df_full['CI_higher'].values.tolist(),
+                'p_adj': df_full['p_adj'].values.tolist(),
+                'effects': df_full.index.tolist()
+            },
+            'young': {
+                'coef': df_young['coef'].values.tolist(),
+                'ci_lower': df_young['CI_lower'].values.tolist(),
+                'ci_upper': df_young['CI_higher'].values.tolist(),
+                'p_adj': df_young['p_adj'].values.tolist(),
+                'effects': df_young.index.tolist()
+            }
+        }
+
+    return data
+
+
+def plot_coefficient_comparison_grid(full_data_path: str,
+                                      young_data_path: str,
+                                      tia_scales: list,
+                                      scale_titles: dict,
+                                      alpha: float = 0.05,
+                                      figsize: tuple = (20, 14),
+                                      categories: dict = None,
+                                      save_path: str = None):
+    """
+    Create a unified grid visualization comparing regression coefficients between full and young samples.
+
+    Parameters:
+        full_data_path: Directory containing full sample CSV files (e.g., '../output/')
+        young_data_path: Directory containing young sample CSV files (e.g., '../output/age/')
+        tia_scales: List of subscale names ['tia_f', 'tia_pro', 'tia_rc', 'tia_up', 'tia_t']
+        scale_titles: Dictionary mapping subscale names to display titles
+        alpha: Significance level (default 0.05)
+        figsize: Figure dimensions (width, height)
+        categories: Effect grouping dict (e.g., {'Group Effect': [...], 'Direct Effects': [...], ...})
+        save_path: Optional path to save the figure
+
+    Returns:
+        tuple: (fig, axes) matplotlib figure and axes array
+    """
+    import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
+    import numpy as np
+
+    # Load data
+    data = load_regression_comparison_data(full_data_path, young_data_path, tia_scales)
+
+    # Predictor label mapping
+    predictor_labels = {
+        'group_effect': 'Group Effect',
+        'age': 'Age',
+        'gender': 'Gender',
+        'education': 'Education',
+        'ai_exp': 'AI Experience',
+        'hcsds_c': 'Healthcare Trust - Competence',
+        'hcsds_v': 'Healthcare Trust - Values',
+        'ati': 'Affinity for Technology',
+        'group_effect:age': 'Group × Age',
+        'group_effect:gender': 'Group × Gender',
+        'group_effect:education': 'Group × Education',
+        'group_effect:ai_exp': 'Group × AI Experience',
+        'group_effect:hcsds_c': 'Group × HC Trust - Comp',
+        'group_effect:hcsds_v': 'Group × HC Trust - Val',
+        'group_effect:ati': 'Group × ATI'
+    }
+
+    # Default categories if not provided
+    if categories is None:
+        categories = {
+            'Group Effect': ['group_effect'],
+            'Direct Effects': ['age', 'gender', 'education', 'ai_exp', 'hcsds_c', 'hcsds_v', 'ati'],
+            'Interaction Effects': [
+                'group_effect:age', 'group_effect:gender', 'group_effect:education',
+                'group_effect:ai_exp', 'group_effect:hcsds_c',
+                'group_effect:hcsds_v', 'group_effect:ati'
+            ]
+        }
+
+    # Calculate y positions with simple linear spacing
+    effect_names = data[tia_scales[0]]['full']['effects']
+    n_effects = len(effect_names)
+
+    # Create simple linear position mapping
+    effect_spacing = 1.0
+    y_positions = {}
+    for idx, effect in enumerate(effect_names):
+        y_positions[effect] = idx * effect_spacing
+
+    # Create figure with subplots
+    fig, axes = plt.subplots(1, len(tia_scales), figsize=figsize, sharey=True)
+
+    # Ensure axes is iterable even with single subplot
+    if len(tia_scales) == 1:
+        axes = [axes]
+
+    # Find global x-axis limits for consistency
+    all_values = []
+    for subscale in tia_scales:
+        all_values.extend(data[subscale]['full']['ci_lower'])
+        all_values.extend(data[subscale]['full']['ci_upper'])
+        all_values.extend(data[subscale]['young']['ci_lower'])
+        all_values.extend(data[subscale]['young']['ci_upper'])
+    x_min = min(all_values) - 0.1
+    x_max = max(all_values) + 0.1
+
+    # Plot each subscale
+    for ax_idx, subscale in enumerate(tia_scales):
+        ax = axes[ax_idx]
+
+        subscale_data = data[subscale]
+        effects = subscale_data['full']['effects']
+
+        # Add vertical reference line at x=0
+        ax.axvline(x=0, linestyle=':', color='gray', alpha=0.5, linewidth=1.5, zorder=1)
+
+        # Plot each effect
+        for effect_idx, effect in enumerate(effects):
+            y_pos = y_positions[effect]
+
+            # Full sample data
+            coef_full = subscale_data['full']['coef'][effect_idx]
+            ci_lower_full = subscale_data['full']['ci_lower'][effect_idx]
+            ci_upper_full = subscale_data['full']['ci_upper'][effect_idx]
+            p_adj_full = subscale_data['full']['p_adj'][effect_idx]
+            stars_full = format_stars_from_pval(p_adj_full)
+
+            # Young sample data
+            coef_young = subscale_data['young']['coef'][effect_idx]
+            ci_lower_young = subscale_data['young']['ci_lower'][effect_idx]
+            ci_upper_young = subscale_data['young']['ci_upper'][effect_idx]
+            p_adj_young = subscale_data['young']['p_adj'][effect_idx]
+            stars_young = format_stars_from_pval(p_adj_young)
+
+            # Offset y positions slightly for visibility
+            y_full = y_pos + 0.15
+            y_young = y_pos - 0.15
+
+            # Plot full sample (blue, square, solid line)
+            ax.plot([ci_lower_full, ci_upper_full], [y_full, y_full],
+                   color=COLORS['primary'], linestyle='-', linewidth=2.5, alpha=0.7, zorder=2)
+            ax.scatter(coef_full, y_full, marker='s', s=80, color=COLORS['primary'],
+                      edgecolor='white', linewidth=0.5, zorder=3)
+
+            # Add significance stars for full sample
+            if stars_full:
+                ax.text(coef_full + 0.015, y_full, stars_full,
+                       fontsize=8, color=COLORS['primary'], va='center', ha='left', zorder=4)
+
+            # Plot young sample (orange, circle, dashed line)
+            ax.plot([ci_lower_young, ci_upper_young], [y_young, y_young],
+                   color=COLORS['accent'], linestyle='--', linewidth=2.5, alpha=0.7, zorder=2)
+            ax.scatter(coef_young, y_young, marker='o', s=80, color=COLORS['accent'],
+                      edgecolor='white', linewidth=0.5, zorder=3)
+
+            # Add significance stars for young sample
+            if stars_young:
+                ax.text(coef_young + 0.015, y_young, stars_young,
+                       fontsize=8, color=COLORS['accent'], va='center', ha='left', zorder=4)
+
+        # Add effect labels (only on leftmost subplot)
+        if ax_idx == 0:
+            for effect in effects:
+                y_pos = y_positions[effect]
+                effect_label = predictor_labels.get(effect, effect)
+                ax.text(-0.01, y_pos,
+                       effect_label,
+                       transform=ax.get_yaxis_transform(),
+                       fontsize=STYLE_CONFIG['font_size'] - 1,
+                       va='center', ha='right')
+
+        # Set axis properties
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(-1, max(y_positions.values()) + 1)
+        ax.set_xlabel('Regression coefficient β', fontsize=STYLE_CONFIG['label_size'])
+        ax.set_title(scale_titles[subscale], fontsize=STYLE_CONFIG['title_size'],
+                    fontweight='bold', pad=STYLE_CONFIG['title_pad'])
+
+        # Remove y-ticks and spines
+        ax.set_yticks([])
+        ax.spines['left'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+
+        # Add grid
+        ax.grid(axis='x', alpha=STYLE_CONFIG['grid_alpha'], linestyle=':', linewidth=0.5)
+
+    # Add legend
+    legend_elements = [
+        Line2D([0], [0], marker='s', color='w', markerfacecolor=COLORS['primary'],
+               markersize=8, label='Full sample (N=255)', linestyle='-',
+               markeredgecolor='white', markeredgewidth=0.5),
+        Line2D([0], [0], marker='o', color='w', markerfacecolor=COLORS['accent'],
+               markersize=8, label='Young only (N=242)', linestyle='--',
+               markeredgecolor='white', markeredgewidth=0.5)
+    ]
+    axes[-1].legend(handles=legend_elements, loc='upper right', frameon=True,
+                   fontsize=STYLE_CONFIG['font_size'], fancybox=True, shadow=False,
+                   framealpha=0.9)
+
+    # Adjust layout
+    plt.tight_layout()
+
+    # Save if path provided
+    if save_path:
+        plt.savefig(save_path, dpi=150, transparent=True, bbox_inches='tight')
+        print(f"Figure saved to: {save_path}")
+
+    return fig, axes
+
+
+# ============================================================================
 # USAGE EXAMPLES
 # ============================================================================
 """
